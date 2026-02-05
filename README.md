@@ -103,8 +103,6 @@ npm run build      # Compile TypeScript to dist/
 npm start          # Run compiled version
 ```
 
-The `pages/` directory contains HTML snapshots of Abacus UI pages, used as reference for understanding Vaadin component structure and `movie-id` selectors.
-
 ## License
 
 [MIT](LICENSE)

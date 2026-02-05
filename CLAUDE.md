@@ -45,5 +45,4 @@ abacus time log --project <id> --hours <n> [--leistungsart <id>] [--text <text>]
 
 ## Development Notes
 
-- The `pages/` directory contains large HTML snapshots of Abacus UI pages, used as reference for understanding Vaadin component structure and `movie-id` selectors.
 - Vaadin grids are virtualized; only visible rows can be read from the DOM.
