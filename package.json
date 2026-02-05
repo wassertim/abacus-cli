@@ -1,0 +1,22 @@
+{
+  "name": "abacus-cli",
+  "version": "0.1.0",
+  "description": "CLI tool for Abacus time tracking via Playwright",
+  "main": "dist/index.js",
+  "bin": {
+    "abacus": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
