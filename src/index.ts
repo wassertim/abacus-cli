@@ -2,6 +2,7 @@
 
 import "dotenv/config";
 import { Command } from "commander";
+import chalk from "chalk";
 import { login } from "./auth";
 import { discover } from "./discover";
 import { registerTimeCommands } from "./commands/time";
@@ -21,7 +22,7 @@ program
       await login();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`Login failed: ${message}`);
+      console.error(chalk.red(`Login failed: ${message}`));
       process.exit(1);
     }
   });
@@ -34,7 +35,7 @@ program
       await discover();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`Discovery failed: ${message}`);
+      console.error(chalk.red(`Discovery failed: ${message}`));
       process.exit(1);
     }
   });

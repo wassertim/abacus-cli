@@ -3,6 +3,7 @@ process.env.REBROWSER_PATCHES_RUNTIME_FIX_MODE = "addBinding";
 
 import { chromium, BrowserContext } from "rebrowser-playwright-core";
 import fs from "fs";
+import chalk from "chalk";
 import { config, ensureConfigDir, hasState } from "./config";
 
 const STEALTH_ARGS = [
@@ -25,8 +26,8 @@ const USER_AGENT =
 export async function login(): Promise<void> {
   ensureConfigDir();
 
-  console.log("Starting browser for login...");
-  console.log(`Navigating to: ${config.abacusUrl}`);
+  console.log(chalk.dim("Starting browser for login..."));
+  console.log(chalk.dim(`Navigating to: ${config.abacusUrl}`));
   console.log("");
   console.log("Please log in manually in the browser window.");
   console.log("The browser will close automatically once login is detected.");
@@ -46,11 +47,11 @@ export async function login(): Promise<void> {
     await page
       .locator('vaadin-button[movie-id="menu-item_rapportierung"]')
       .waitFor({ state: "visible", timeout: 300_000 });
-    console.log("Login detected!");
+    console.log(chalk.green("Login detected!"));
   } catch {
     console.log("");
     console.log(
-      "Auto-detection timed out. If you are logged in, press Enter in this terminal to save the session."
+      chalk.yellow("Auto-detection timed out. If you are logged in, press Enter in this terminal to save the session.")
     );
     await new Promise<void>((resolve) => {
       process.stdin.once("data", () => resolve());
@@ -62,7 +63,7 @@ export async function login(): Promise<void> {
   fs.writeFileSync(config.statePath, JSON.stringify(storageState, null, 2));
 
   console.log("");
-  console.log(`Session saved to ${config.statePath}`);
+  console.log(chalk.green(`Session saved to ${config.statePath}`));
 
   await browser.close();
 }

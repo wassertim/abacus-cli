@@ -3,20 +3,25 @@
 
 import { Page } from "rebrowser-playwright-core";
 import * as readline from "readline";
+import Table from "cli-table3";
 import { createAuthenticatedContext } from "./auth";
 import { config } from "./config";
 import { t, detectLocale, setLocale, confirmDeleteKey, Locale } from "./i18n";
+import {
+  success, err, warn, info, bold, highlight, dim,
+  spin, stopSpinner, succeed, fail,
+} from "./ui";
 
 /** Retry wrapper: if FortiADC captcha is solved, retry the operation once. */
 async function withCaptchaRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
-  } catch (err: unknown) {
-    if (err instanceof Error && err.message === "CAPTCHA_SOLVED_RETRY") {
-      console.log(t().captchaRetry);
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === "CAPTCHA_SOLVED_RETRY") {
+      spin(t().captchaRetry);
       return fn();
     }
-    throw err;
+    throw error;
   }
 }
 
@@ -109,12 +114,12 @@ async function initLocale(page: Page): Promise<void> {
 
 /** Navigate to Leistungen page via Rapportierung menu. */
 async function navigateToLeistungen(page: Page): Promise<void> {
-  console.log(t().navigatingToPortal);
+  spin(t().navigatingToPortal);
   await page.goto(config.abacusUrl, { waitUntil: "networkidle" });
 
   // Detect FortiADC captcha redirect
   if (page.url().includes("fortiadc_captcha")) {
-    console.log(t().captchaDetected);
+    fail(warn(t().captchaDetected));
 
     // Get the browser context to access storageState and relaunch
     const context = page.context();
@@ -181,14 +186,14 @@ async function navigateToLeistungen(page: Page): Promise<void> {
   // Auto-detect locale after page loads and before navigating further
   await initLocale(page);
 
-  console.log(t().openingRapportierung);
+  spin(t().openingRapportierung);
   const isExpanded = await rapportierungToggle.getAttribute("aria-expanded");
   if (isExpanded !== "true") {
     await rapportierungToggle.click();
     await waitForVaadin(page);
   }
 
-  console.log(t().openingLeistungen);
+  spin(t().openingLeistungen);
   await page.locator('a[href^="proj_services"]').click();
   await waitForVaadin(page);
 }
@@ -199,14 +204,14 @@ async function navigateToLeistungen(page: Page): Promise<void> {
  */
 async function setMonthFilter(page: Page, monthYear: string): Promise<void> {
   // Set Ansicht to "Monat" (position 3 in dropdown)
-  console.log(t().settingAnsichtMonth);
+  spin(t().settingAnsichtMonth);
   await selectComboboxByIndex(page, "cmbDateRange", 3);
 
   // Set Datum to the first day of the requested month
   const [mm, yyyy] = monthYear.split(".");
   const formattedDate = `01.${mm}.${yyyy}`;
 
-  console.log(t().settingDatum(formattedDate));
+  spin(t().settingDatum(formattedDate));
   const datePicker = page.locator("vaadin-date-picker#dateField");
   const input = datePicker.locator("input");
 
@@ -330,7 +335,7 @@ async function clickRow(page: Page, rowIndex: number): Promise<void> {
 async function fillForm(page: Page, entry: TimeEntry): Promise<void> {
   // Datum (movie-id="ProjDat")
   const formattedDate = formatDate(entry.date);
-  console.log(t().settingDatumField(formattedDate));
+  spin(t().settingDatumField(formattedDate));
   const dateInput = page.locator('vaadin-date-picker[movie-id="ProjDat"] input');
   await dateInput.click({ clickCount: 3 });
   await page.keyboard.press("Backspace");
@@ -339,11 +344,11 @@ async function fillForm(page: Page, entry: TimeEntry): Promise<void> {
   await waitForVaadin(page);
 
   // Projekt-Nr. (movie-id="ProjNr2")
-  console.log(t().settingProjekt(entry.project));
+  spin(t().settingProjekt(entry.project));
   await fillCombobox(page, "ProjNr2", entry.project);
 
   // Leistungsart (movie-id="LeArtNr") — appears after project selection
-  console.log(t().settingLeistungsart(entry.leistungsart));
+  spin(t().settingLeistungsart(entry.leistungsart));
   const leistungsartCombo = page.locator(
     'vaadin-combo-box[movie-id="LeArtNr"]'
   );
@@ -351,7 +356,7 @@ async function fillForm(page: Page, entry: TimeEntry): Promise<void> {
   await fillCombobox(page, "LeArtNr", entry.leistungsart);
 
   // Stunden (movie-id="Menge")
-  console.log(t().settingStunden(entry.hours));
+  spin(t().settingStunden(entry.hours));
   const hoursField = page.locator(
     'vaadin-text-field[movie-id="Menge"] input'
   );
@@ -363,7 +368,7 @@ async function fillForm(page: Page, entry: TimeEntry): Promise<void> {
 
   // Buchungstext (movie-id="Text")
   if (entry.buchungstext) {
-    console.log(t().settingBuchungstext(entry.buchungstext));
+    spin(t().settingBuchungstext(entry.buchungstext));
     const buchungstext = page.locator(
       'vaadin-text-field[movie-id="Text"] input'
     );
@@ -430,11 +435,11 @@ function toMonthYear(date: string): string {
  * @param date — format "YYYY-MM-DD"
  */
 async function setWeekFilter(page: Page, date: string): Promise<void> {
-  console.log(t().settingAnsichtWeek);
+  spin(t().settingAnsichtWeek);
   await selectComboboxByIndex(page, "cmbDateRange", 2);
 
   const formattedDate = formatDate(date);
-  console.log(t().settingDatum(formattedDate));
+  spin(t().settingDatum(formattedDate));
   const datePicker = page.locator("vaadin-date-picker#dateField");
   const input = datePicker.locator("input");
 
@@ -459,7 +464,7 @@ export async function statusTime(date: string): Promise<void> {
     await navigateToLeistungen(page);
     await setWeekFilter(page, date);
 
-    console.log(t().readingRapportmatrix);
+    spin(t().readingRapportmatrix);
 
     const rows = await page.evaluate(() => {
       const panel = document.querySelector(
@@ -493,33 +498,23 @@ export async function statusTime(date: string): Promise<void> {
     });
 
     if (rows.length === 0) {
-      console.log(t().rapportmatrixNotFound);
+      fail(err(t().rapportmatrixNotFound));
       return;
     }
 
-    const labelWidth = Math.max(...rows.map((r) => r.label.length));
-    const col1Width = Math.max(6, ...rows.map((r) => r.col1.length));
+    stopSpinner();
 
-    console.log("");
-    console.log(
-      t().rapportmatrixTitle.padEnd(labelWidth) +
-        "  " +
-        t().colDay.padStart(col1Width) +
-        "  " +
-        t().colTotal
-    );
-    console.log("-".repeat(labelWidth + col1Width + 12));
+    const table = new Table({
+      head: [t().rapportmatrixTitle, t().colDay, t().colTotal],
+      style: { head: ["cyan"] },
+    });
 
     for (const r of rows) {
-      console.log(
-        r.label.padEnd(labelWidth) +
-          "  " +
-          r.col1.padStart(col1Width) +
-          "  " +
-          r.col2
-      );
+      table.push([r.label, r.col1, r.col2]);
     }
+
     console.log("");
+    console.log(table.toString());
 
     // --- Hints ---
     const entries = await readGridEntries(page);
@@ -549,7 +544,7 @@ export async function statusTime(date: string): Promise<void> {
 
     if (missingDaysList.length > 0) {
       console.log(
-        t().missingDays(missingDaysList.length, missingDaysList.join(", "))
+        warn(t().missingDays(missingDaysList.length, missingDaysList.join(", ")))
       );
     }
 
@@ -559,7 +554,7 @@ export async function statusTime(date: string): Promise<void> {
       const diff = parseFloat(diffRow.col2.replace(",", "."));
       if (diff < 0) {
         const missing = Math.abs(diff);
-        console.log(t().missingHours(missing.toFixed(2)));
+        console.log(warn(t().missingHours(missing.toFixed(2))));
 
         // Suggest command based on last entry
         const lastEntry = entries[entries.length - 1];
@@ -570,9 +565,9 @@ export async function statusTime(date: string): Promise<void> {
           const leistungsartNr = lastEntry.leistungsart.split(".")[0].trim();
           const hours = Math.min(missing, 8);
           console.log("");
-          console.log(t().exampleLabel);
+          console.log(bold(t().exampleLabel));
           console.log(
-            `  npx abacus time log --project ${projektNr} --hours ${hours.toFixed(2)} --leistungsart ${leistungsartNr} --text "${lastEntry.text || "..."}" --date ${missingDaysList.length > 0 ? missingDaysList[0].split(".").reverse().join("-") : date}`
+            dim(`  npx abacus time log --project ${projektNr} --hours ${hours.toFixed(2)} --leistungsart ${leistungsartNr} --text "${lastEntry.text || "..."}" --date ${missingDaysList.length > 0 ? missingDaysList[0].split(".").reverse().join("-") : date}`)
           );
         }
       }
@@ -598,54 +593,36 @@ export async function listTime(monthYear: string): Promise<void> {
     await navigateToLeistungen(page);
     await setMonthFilter(page, monthYear);
 
-    console.log(t().readingEntries);
+    spin(t().readingEntries);
     const entries = await readGridEntries(page);
 
     if (entries.length === 0) {
-      console.log(t().noEntriesFound);
+      stopSpinner();
+      console.log(info(t().noEntriesFound));
       return;
     }
 
-    // Compute column widths from data
-    const cols = {
-      datum: Math.max(t().headerDatum.length, ...entries.map((e) => e.datum.length)),
-      projekt: Math.max(t().headerProjekt.length, ...entries.map((e) => e.projekt.length)),
-      leistungsart: Math.max(t().headerLeistungsart.length, ...entries.map((e) => e.leistungsart.length)),
-      anzahl: Math.max(t().headerStunden.length, ...entries.map((e) => e.anzahl.length)),
-    };
+    stopSpinner();
 
-    const header =
-      t().headerDatum.padEnd(cols.datum) +
-      "  " +
-      t().headerProjekt.padEnd(cols.projekt) +
-      "  " +
-      t().headerLeistungsart.padEnd(cols.leistungsart) +
-      "  " +
-      t().headerStunden.padStart(cols.anzahl) +
-      "  " +
-      t().headerText;
-    const line = "-".repeat(header.length);
-
-    console.log("");
-    console.log(header);
-    console.log(line);
+    const table = new Table({
+      head: [
+        t().headerDatum,
+        t().headerProjekt,
+        t().headerLeistungsart,
+        t().headerStunden,
+        t().headerText,
+      ],
+      style: { head: ["cyan"] },
+    });
 
     for (const e of entries) {
-      console.log(
-        e.datum.padEnd(cols.datum) +
-          "  " +
-          e.projekt.padEnd(cols.projekt) +
-          "  " +
-          e.leistungsart.padEnd(cols.leistungsart) +
-          "  " +
-          e.anzahl.padStart(cols.anzahl) +
-          "  " +
-          e.text
-      );
+      table.push([e.datum, e.projekt, e.leistungsart, e.anzahl, e.text]);
     }
 
     console.log("");
-    console.log(t().entriesTotal(entries.length));
+    console.log(table.toString());
+    console.log("");
+    console.log(info(t().entriesTotal(entries.length)));
   } finally {
     await close();
   }
@@ -666,7 +643,7 @@ export async function logTime(entry: TimeEntry): Promise<void> {
     await setMonthFilter(page, toMonthYear(entry.date));
 
     // Read entries and check for duplicate
-    console.log(t().readingExistingEntries);
+    spin(t().readingExistingEntries);
     const allEntries = await readGridEntries(page);
     const targetDate = formatDate(entry.date);
     const match = allEntries.find(
@@ -674,8 +651,9 @@ export async function logTime(entry: TimeEntry): Promise<void> {
     );
 
     if (match) {
+      stopSpinner();
       console.log("");
-      console.log(t().alreadyBooked(match.anzahl, match.datum, match.projekt));
+      console.log(warn(t().alreadyBooked(match.anzahl, match.datum, match.projekt)));
       console.log(`  ${t().leistungsartLabel}: ${match.leistungsart}`);
       if (match.text) console.log(`  ${t().textLabel}: ${match.text}`);
       console.log("");
@@ -683,11 +661,11 @@ export async function logTime(entry: TimeEntry): Promise<void> {
       const answer = await promptUser(t().promptUpdateOrNew);
 
       if (answer === t().promptYes) {
-        console.log(t().openingExistingEntry);
+        spin(t().openingExistingEntry);
         await clickRow(page, match.rowIndex);
         await fillForm(page, entry);
       } else {
-        console.log(t().creatingNewEntry);
+        spin(t().creatingNewEntry);
         await page.locator('vaadin-button[movie-id="mainAction"]').click();
         await waitForVaadin(page);
         await page
@@ -696,7 +674,7 @@ export async function logTime(entry: TimeEntry): Promise<void> {
         await fillForm(page, entry);
       }
     } else {
-      console.log(t().noExistingEntryCreating);
+      spin(t().noExistingEntryCreating);
       await page.locator('vaadin-button[movie-id="mainAction"]').click();
       await waitForVaadin(page);
       await page
@@ -706,7 +684,7 @@ export async function logTime(entry: TimeEntry): Promise<void> {
     }
 
     // Save — try side panel save button, then fall back to dialog button
-    console.log(t().saving);
+    spin(t().saving);
     const saveBtn = page.locator('vaadin-button[movie-id="btnSave"]');
     const dialogSaveBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
 
@@ -715,11 +693,11 @@ export async function logTime(entry: TimeEntry): Promise<void> {
     } else if (await dialogSaveBtn.isVisible().catch(() => false)) {
       await dialogSaveBtn.click();
     } else {
-      console.log(t().saveButtonNotFound);
+      fail(err(t().saveButtonNotFound));
       return;
     }
     await waitForVaadin(page);
-    console.log(t().saved);
+    succeed(success(t().saved));
   } finally {
     await close();
   }
@@ -742,7 +720,7 @@ export async function deleteTime(
     await navigateToLeistungen(page);
     await setMonthFilter(page, toMonthYear(date));
 
-    console.log(t().readingEntries);
+    spin(t().readingEntries);
     const allEntries = await readGridEntries(page);
     const targetDate = formatDate(date);
     const matches = allEntries.filter(
@@ -750,7 +728,8 @@ export async function deleteTime(
     );
 
     if (matches.length === 0) {
-      console.log(t().noEntryFound(targetDate, project));
+      stopSpinner();
+      console.log(info(t().noEntryFound(targetDate, project)));
       return;
     }
 
@@ -758,6 +737,7 @@ export async function deleteTime(
 
     if (matches.length === 1) {
       match = matches[0];
+      stopSpinner();
       console.log(t().foundEntry(match.anzahl, match.datum, match.projekt));
       console.log(`  ${t().leistungsartLabel}: ${match.leistungsart}`);
       if (match.text) console.log(`  ${t().textLabel}: ${match.text}`);
@@ -765,10 +745,11 @@ export async function deleteTime(
 
       const answer = await promptUser(t().promptConfirmDelete);
       if (answer !== confirmDeleteKey()) {
-        console.log(t().cancelled);
+        console.log(info(t().cancelled));
         return;
       }
     } else {
+      stopSpinner();
       console.log(t().multipleEntriesFound(matches.length, targetDate, project));
       console.log("");
       for (let i = 0; i < matches.length; i++) {
@@ -781,34 +762,35 @@ export async function deleteTime(
 
       const answer = await promptUser(t().promptWhichDelete(matches.length));
       if (answer === "n") {
-        console.log(t().cancelled);
+        console.log(info(t().cancelled));
         return;
       }
       if (answer === "a") {
         // Delete all matches in reverse order (so rowIndex stays valid)
         for (let i = matches.length - 1; i >= 0; i--) {
-          console.log(t().deletingEntry(i + 1, matches.length));
+          spin(t().deletingEntry(i + 1, matches.length));
           await clickRow(page, matches[i].rowIndex);
           await deleteSidePanelEntry(page);
         }
-        console.log(t().entriesDeleted(matches.length));
+        succeed(success(t().entriesDeleted(matches.length)));
         return;
       }
       const idx = parseInt(answer, 10) - 1;
       if (isNaN(idx) || idx < 0 || idx >= matches.length) {
-        console.log(t().invalidSelection);
+        console.log(warn(t().invalidSelection));
         return;
       }
       match = matches[idx];
     }
 
     // Open side panel for this entry
+    spin(t().deletingEntry(1, 1));
     await clickRow(page, match.rowIndex);
 
     // Delete via three-dot menu
     await deleteSidePanelEntry(page);
 
-    console.log(t().entryDeleted);
+    succeed(success(t().entryDeleted));
   } finally {
     await close();
   }

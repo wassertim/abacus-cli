@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { logTime, listTime, deleteTime, statusTime } from "../api";
 import { t } from "../i18n";
+import { bold, highlight, info, err, fail } from "../ui";
 
 export function registerTimeCommands(program: Command): void {
   const time = program.command("time").description("Time tracking commands");
@@ -13,9 +14,9 @@ export function registerTimeCommands(program: Command): void {
       const date = options.date || new Date().toISOString().split("T")[0];
       try {
         await statusTime(date);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`Error: ${message}`);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        fail(err(message));
         process.exit(1);
       }
     });
@@ -25,14 +26,14 @@ export function registerTimeCommands(program: Command): void {
     .description("List time entries for a month")
     .requiredOption("--monthYear <MM.YYYY>", "Month and year (e.g. 01.2025)")
     .action(async (options) => {
-      console.log(t().listingEntries(options.monthYear));
+      console.log(info(t().listingEntries(options.monthYear)));
       console.log("");
 
       try {
         await listTime(options.monthYear);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`Error: ${message}`);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        fail(err(message));
         process.exit(1);
       }
     });
@@ -48,12 +49,12 @@ export function registerTimeCommands(program: Command): void {
     .action(async (options) => {
       const date = options.date || new Date().toISOString().split("T")[0];
 
-      console.log(t().timeEntryLabel);
-      console.log(`  Project:       ${options.project}`);
-      console.log(`  ${t().leistungsartLabel}:  ${options.leistungsart}`);
-      console.log(`  Hours:         ${options.hours}`);
-      console.log(`  Date:          ${date}`);
-      if (options.text) console.log(`  ${t().textLabel}:  ${options.text}`);
+      console.log(bold(t().timeEntryLabel));
+      console.log(`  ${bold("Project:")}       ${highlight(options.project)}`);
+      console.log(`  ${bold(t().leistungsartLabel + ":")}  ${highlight(options.leistungsart)}`);
+      console.log(`  ${bold("Hours:")}         ${highlight(String(options.hours))}`);
+      console.log(`  ${bold("Date:")}          ${highlight(date)}`);
+      if (options.text) console.log(`  ${bold(t().textLabel + ":")}  ${highlight(options.text)}`);
       console.log("");
 
       try {
@@ -64,9 +65,9 @@ export function registerTimeCommands(program: Command): void {
           date,
           buchungstext: options.text || "",
         });
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`Error: ${message}`);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        fail(err(message));
         process.exit(1);
       }
     });
@@ -80,14 +81,14 @@ export function registerTimeCommands(program: Command): void {
       "Project number (e.g. 71100000001)"
     )
     .action(async (options) => {
-      console.log(t().deletingEntryFor(options.date, options.project));
+      console.log(info(t().deletingEntryFor(options.date, options.project)));
       console.log("");
 
       try {
         await deleteTime(options.date, options.project);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`Error: ${message}`);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        fail(err(message));
         process.exit(1);
       }
     });
