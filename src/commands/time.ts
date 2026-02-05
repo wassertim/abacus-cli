@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { logTime, listTime, deleteTime, statusTime } from "../api";
+import { t } from "../i18n";
 
 export function registerTimeCommands(program: Command): void {
   const time = program.command("time").description("Time tracking commands");
@@ -24,7 +25,7 @@ export function registerTimeCommands(program: Command): void {
     .description("List time entries for a month")
     .requiredOption("--monthYear <MM.YYYY>", "Month and year (e.g. 01.2025)")
     .action(async (options) => {
-      console.log(`Listing entries for ${options.monthYear}...`);
+      console.log(t().listingEntries(options.monthYear));
       console.log("");
 
       try {
@@ -41,18 +42,18 @@ export function registerTimeCommands(program: Command): void {
     .description("Log a time entry")
     .requiredOption("--project <name>", "Project number (e.g. 71100000001)")
     .requiredOption("--hours <n>", "Number of hours", parseFloat)
-    .option("--leistungsart <name>", "Leistungsart (default: 1435)", "1435")
-    .option("--text <text>", "Buchungstext")
+    .option("--leistungsart <name>", "Leistungsart / service type (default: 1435)", "1435")
+    .option("--text <text>", "Buchungstext / description")
     .option("--date <YYYY-MM-DD>", "Date (default: today)")
     .action(async (options) => {
       const date = options.date || new Date().toISOString().split("T")[0];
 
-      console.log("Time entry:");
+      console.log(t().timeEntryLabel);
       console.log(`  Project:       ${options.project}`);
-      console.log(`  Leistungsart:  ${options.leistungsart}`);
+      console.log(`  ${t().leistungsartLabel}:  ${options.leistungsart}`);
       console.log(`  Hours:         ${options.hours}`);
       console.log(`  Date:          ${date}`);
-      if (options.text) console.log(`  Buchungstext:  ${options.text}`);
+      if (options.text) console.log(`  ${t().textLabel}:  ${options.text}`);
       console.log("");
 
       try {
@@ -79,7 +80,7 @@ export function registerTimeCommands(program: Command): void {
       "Project number (e.g. 71100000001)"
     )
     .action(async (options) => {
-      console.log(`Deleting entry for ${options.date} / ${options.project}...`);
+      console.log(t().deletingEntryFor(options.date, options.project));
       console.log("");
 
       try {

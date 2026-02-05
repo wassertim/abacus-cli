@@ -12,7 +12,14 @@
   "bugs": {
     "url": "https://github.com/timpetri/abacus-cli/issues"
   },
-  "keywords": ["abacus", "time-tracking", "playwright", "cli", "vaadin", "automation"],
+  "keywords": [
+    "abacus",
+    "time-tracking",
+    "playwright",
+    "cli",
+    "vaadin",
+    "automation"
+  ],
   "main": "dist/index.js",
   "bin": {
     "abacus": "dist/index.js"
@@ -24,6 +31,7 @@
   },
   "dependencies": {
     "commander": "^12.1.0",
+    "dotenv": "^17.2.3",
     "playwright": "^1.48.0",
     "rebrowser-playwright-core": "^1.52.0"
   },

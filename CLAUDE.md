@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 abacus-cli is a TypeScript CLI tool that automates time entry logging in Abacus ERP. Abacus uses Vaadin (server-side Java UI framework) with no REST API, so all interaction is done via **Playwright browser automation**. The target instance URL is configured via the `ABACUS_URL` environment variable.
 
-The project language/UI context is **German** (e.g., Leistungsart, Buchungstext, Wochenrapport).
+The project supports **multiple UI languages** (de, en, fr, it, es). Locale is auto-detected from the Abacus page or overridden via `ABACUS_LOCALE` env var. All user-facing strings live in `src/i18n.ts`.
 
 ## Commands
 
@@ -37,9 +37,10 @@ abacus time log --project <id> --hours <n> [--leistungsart <id>] [--text <text>]
    - `fillCombobox(page, movieId, value)` — Types character-by-character with delays to trigger Vaadin's filter events, then presses Enter to select.
    - `logTime(entry)` — Full workflow: navigate to page, check for duplicates, fill form fields, save automatically.
    - Form fields are identified by Vaadin's `movie-id` attribute (e.g., ProjNr2, LeArtNr, Menge, Text).
-3. `src/config.ts` — Config paths (`~/.abacus-cli/`) and helpers.
-4. `src/commands/time.ts` — The `time log` subcommand with flag parsing.
-5. `src/discover.ts` — Network interceptor that captures XHR/fetch requests for debugging.
+3. `src/i18n.ts` — Multi-language support. Translations for de/en/fr/it/es, locale auto-detection, and `t()` accessor for all UI and CLI strings.
+4. `src/config.ts` — Config paths (`~/.abacus-cli/`) and helpers.
+5. `src/commands/time.ts` — The `time log` subcommand with flag parsing.
+6. `src/discover.ts` — Network interceptor that captures XHR/fetch requests for debugging.
 
 **Key pattern:** Vaadin comboboxes require special handling — char-by-char input with 50ms delays + `waitForVaadin()` between interactions. Direct `.fill()` doesn't trigger Vaadin's server-side filtering.
 
