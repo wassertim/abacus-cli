@@ -84,6 +84,10 @@ export interface Translations {
   invalidSelection: string;
   entryDeleted: string;
 
+  // --- CLI output: list report ---
+  missingDayRow: string;
+  missingDaysSummary: (count: number) => string;
+
   // --- CLI output: time command ---
   listingEntries: (monthYear: string) => string;
   deletingEntryFor: (date: string, project: string) => string;
@@ -179,6 +183,11 @@ const de: Translations = {
   entriesDeleted: (count) => `${count} Einträge gelöscht.`,
   invalidSelection: "Ungültige Auswahl. Abgebrochen.",
   entryDeleted: "Eintrag gelöscht.",
+
+  // List report
+  missingDayRow: "Keine Einträge",
+  missingDaysSummary: (count) =>
+    `${count} Arbeitstag${count > 1 ? "e" : ""} ohne Einträge.`,
 
   // Time command
   listingEntries: (monthYear) => `Listing entries for ${monthYear}...`,
@@ -277,6 +286,11 @@ const en: Translations = {
   invalidSelection: "Invalid selection. Cancelled.",
   entryDeleted: "Entry deleted.",
 
+  // List report
+  missingDayRow: "No entries",
+  missingDaysSummary: (count) =>
+    `${count} workday${count > 1 ? "s" : ""} without entries.`,
+
   // Time command
   listingEntries: (monthYear) => `Listing entries for ${monthYear}...`,
   deletingEntryFor: (date, project) =>
@@ -373,6 +387,11 @@ const fr: Translations = {
   entriesDeleted: (count) => `${count} entrées supprimées.`,
   invalidSelection: "Sélection invalide. Annulé.",
   entryDeleted: "Entrée supprimée.",
+
+  // List report
+  missingDayRow: "Aucune entrée",
+  missingDaysSummary: (count) =>
+    `${count} jour${count > 1 ? "s" : ""} ouvrable${count > 1 ? "s" : ""} sans entrées.`,
 
   // Time command
   listingEntries: (monthYear) => `Liste des entrées pour ${monthYear}...`,
@@ -471,6 +490,11 @@ const it: Translations = {
   invalidSelection: "Selezione non valida. Annullato.",
   entryDeleted: "Voce eliminata.",
 
+  // List report
+  missingDayRow: "Nessuna voce",
+  missingDaysSummary: (count) =>
+    `${count} giorn${count > 1 ? "i" : "o"} lavorativ${count > 1 ? "i" : "o"} senza voci.`,
+
   // Time command
   listingEntries: (monthYear) => `Elenco voci per ${monthYear}...`,
   deletingEntryFor: (date, project) =>
@@ -567,6 +591,11 @@ const es: Translations = {
   entriesDeleted: (count) => `${count} entradas eliminadas.`,
   invalidSelection: "Selección inválida. Cancelado.",
   entryDeleted: "Entrada eliminada.",
+
+  // List report
+  missingDayRow: "Sin entradas",
+  missingDaysSummary: (count) =>
+    `${count} día${count > 1 ? "s" : ""} laborable${count > 1 ? "s" : ""} sin entradas.`,
 
   // Time command
   listingEntries: (monthYear) => `Listando entradas para ${monthYear}...`,

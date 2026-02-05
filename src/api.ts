@@ -7,6 +7,7 @@ import Table from "cli-table3";
 import { createAuthenticatedContext } from "./auth";
 import { config } from "./config";
 import { t, detectLocale, setLocale, confirmDeleteKey, Locale } from "./i18n";
+import chalk from "chalk";
 import {
   success, err, warn, info, bold, highlight, dim,
   spin, stopSpinner, succeed, fail,
@@ -596,14 +597,39 @@ export async function listTime(monthYear: string): Promise<void> {
     spin(t().readingEntries);
     const entries = await readGridEntries(page);
 
-    if (entries.length === 0) {
-      stopSpinner();
-      console.log(info(t().noEntriesFound));
-      return;
-    }
-
     stopSpinner();
 
+    // Compute weekdays in the month up to today
+    const [mm, yyyy] = monthYear.split(".");
+    const year = parseInt(yyyy, 10);
+    const month = parseInt(mm, 10) - 1; // 0-indexed
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const lastDay = new Date(year, month + 1, 0); // last day of month
+    const endDate = lastDay < today ? lastDay : today;
+
+    const weekdays: string[] = [];
+    for (
+      let d = new Date(year, month, 1);
+      d <= endDate;
+      d.setDate(d.getDate() + 1)
+    ) {
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue;
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mmStr = String(d.getMonth() + 1).padStart(2, "0");
+      weekdays.push(`${dd}.${mmStr}.${d.getFullYear()}`);
+    }
+
+    // Group entries by datum
+    const entriesByDate = new Map<string, ExistingEntry[]>();
+    for (const e of entries) {
+      const list = entriesByDate.get(e.datum) || [];
+      list.push(e);
+      entriesByDate.set(e.datum, list);
+    }
+
+    // Build table with missing-day warnings interleaved
     const table = new Table({
       head: [
         t().headerDatum,
@@ -615,14 +641,43 @@ export async function listTime(monthYear: string): Promise<void> {
       style: { head: ["cyan"] },
     });
 
+    let missingCount = 0;
+    const datesRendered = new Set<string>();
+
+    for (const day of weekdays) {
+      const dayEntries = entriesByDate.get(day);
+      datesRendered.add(day);
+      if (dayEntries && dayEntries.length > 0) {
+        for (const e of dayEntries) {
+          table.push([e.datum, e.projekt, e.leistungsart, e.anzahl, e.text]);
+        }
+      } else {
+        missingCount++;
+        table.push([
+          chalk.yellow(day),
+          chalk.yellow(`⚠ ${t().missingDayRow}`),
+          "",
+          "",
+          "",
+        ]);
+      }
+    }
+
+    // Append entries with dates outside the weekday range (e.g. weekend entries)
     for (const e of entries) {
-      table.push([e.datum, e.projekt, e.leistungsart, e.anzahl, e.text]);
+      if (!datesRendered.has(e.datum)) {
+        table.push([e.datum, e.projekt, e.leistungsart, e.anzahl, e.text]);
+        datesRendered.add(e.datum);
+      }
     }
 
     console.log("");
     console.log(table.toString());
     console.log("");
     console.log(info(t().entriesTotal(entries.length)));
+    if (missingCount > 0) {
+      console.log(warn(t().missingDaysSummary(missingCount)));
+    }
   } finally {
     await close();
   }
