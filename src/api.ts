@@ -1,10 +1,23 @@
 // Abacus uses Vaadin (server-side Java framework) with a single UIDL endpoint.
 // There is no REST API. All interactions must go through browser automation.
 
-import { Page } from "playwright";
+import { Page } from "rebrowser-playwright-core";
 import * as readline from "readline";
 import { createAuthenticatedContext } from "./auth";
 import { config } from "./config";
+
+/** Retry wrapper: if FortiADC captcha is solved, retry the operation once. */
+async function withCaptchaRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "CAPTCHA_SOLVED_RETRY") {
+      console.log("Captcha solved. Retrying...");
+      return fn();
+    }
+    throw err;
+  }
+}
 
 export interface TimeEntry {
   project: string;
@@ -63,13 +76,77 @@ async function fillCombobox(
 /** Navigate to Leistungen page via Rapportierung menu. */
 async function navigateToLeistungen(page: Page): Promise<void> {
   console.log("Navigating to Abacus portal...");
-  await page.goto(config.abacusUrl);
+  await page.goto(config.abacusUrl, { waitUntil: "networkidle" });
+
+  // Detect FortiADC captcha redirect
+  if (page.url().includes("fortiadc_captcha")) {
+    console.log("FortiADC captcha detected. Reopening in headed mode...");
+
+    // Get the browser context to access storageState and relaunch
+    const context = page.context();
+    const state = await context.storageState();
+    const browser = context.browser();
+
+    // Close headless browser
+    if (browser) await browser.close();
+
+    // Relaunch in headed mode
+    const { chromium } = await import("rebrowser-playwright-core");
+    const headedBrowser = await chromium.launch({
+      headless: false,
+      args: [
+        "--disable-blink-features=AutomationControlled",
+        "--no-first-run",
+      ],
+    });
+    const headedContext = await headedBrowser.newContext({
+      storageState: state,
+      viewport: { width: 1280, height: 800 },
+    });
+    const headedPage = await headedContext.newPage();
+    await headedPage.goto(config.abacusUrl, { waitUntil: "networkidle" });
+
+    console.log("Please solve the captcha in the browser window.");
+    console.log("Waiting for portal to load...");
+
+    // Wait for captcha to be solved and portal to load
+    await headedPage.waitForFunction(
+      () => !window.location.href.includes("fortiadc_captcha"),
+      { timeout: 120_000 }
+    );
+    await waitForVaadin(headedPage);
+
+    // Save updated session state (with captcha cookie)
+    const newState = await headedContext.storageState();
+    const fs = await import("fs");
+    const { config: cfg } = await import("./config");
+    fs.writeFileSync(cfg.statePath, JSON.stringify(newState, null, 2));
+
+    await headedBrowser.close();
+
+    // Throw a special error to retry the whole operation
+    throw new Error("CAPTCHA_SOLVED_RETRY");
+  }
+
   await waitForVaadin(page);
 
-  console.log("Opening Rapportierung menu...");
+  // Check if session is still valid (page should have Vaadin menu)
   const rapportierungToggle = page.locator(
     'vaadin-button[movie-id="menu-item_rapportierung"]'
   );
+  const menuVisible = await rapportierungToggle
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!menuVisible) {
+    const url = page.url();
+    throw new Error(
+      `Session abgelaufen oder Seite nicht geladen (URL: ${url}). Bitte 'abacus login' erneut ausführen.`
+    );
+  }
+
+  console.log("Opening Rapportierung menu...");
   const isExpanded = await rapportierungToggle.getAttribute("aria-expanded");
   if (isExpanded !== "true") {
     await rapportierungToggle.click();
@@ -298,25 +375,6 @@ function promptUser(question: string): Promise<string> {
   });
 }
 
-/** Wait for user to review in the browser, then close. */
-async function waitForReview(
-  page: Page,
-  context: { on: Function }
-): Promise<void> {
-  console.log("");
-  console.log("Form filled. Please review in the browser.");
-  console.log(
-    "Browser closes automatically in 2 minutes, or close it manually."
-  );
-
-  await Promise.race([
-    new Promise<void>((resolve) => {
-      page.on("close", () => resolve());
-      context.on("close", () => resolve());
-    }),
-    new Promise<void>((resolve) => setTimeout(resolve, 120_000)),
-  ]);
-}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -335,10 +393,171 @@ function toMonthYear(date: string): string {
 }
 
 /**
+ * Set the Leistungen page filters to show a week containing the given date.
+ * @param date — format "YYYY-MM-DD"
+ */
+async function setWeekFilter(page: Page, date: string): Promise<void> {
+  console.log("Setting Ansicht to Woche...");
+  await fillCombobox(page, "cmbDateRange", "Woche");
+
+  const formattedDate = formatDate(date);
+  console.log(`Setting Datum to ${formattedDate}...`);
+  const datePicker = page.locator("vaadin-date-picker#dateField");
+  const input = datePicker.locator("input");
+
+  await input.click({ clickCount: 3 });
+  await page.keyboard.press("Backspace");
+  await input.pressSequentially(formattedDate, { delay: 30 });
+  await input.press("Enter");
+  await page.waitForTimeout(500);
+  await waitForVaadin(page);
+}
+
+/**
+ * Show the Rapportmatrix (time account status) for the week containing the given date.
+ * @param date — format "YYYY-MM-DD", defaults to today
+ */
+export async function statusTime(date: string): Promise<void> {
+  return withCaptchaRetry(async () => {
+  const { context, close } = await createAuthenticatedContext();
+
+  try {
+    const page = await context.newPage();
+    await navigateToLeistungen(page);
+    await setWeekFilter(page, date);
+
+    console.log("Reading Rapportmatrix...");
+
+    const rows = await page.evaluate(() => {
+      const panel = document.querySelector(
+        'vaadin-vertical-layout[movie-id="id_pnl_matrixView"]'
+      );
+      if (!panel) return [];
+
+      const flexRows = panel.querySelectorAll("div.va-flex-layout");
+      const results: { label: string; col1: string; col2: string }[] = [];
+
+      for (const row of Array.from(flexRows)) {
+        const cells = row.querySelectorAll(
+          "div.va-html-label, div.va-label"
+        );
+        if (cells.length < 3) continue;
+
+        const getText = (el: Element): string =>
+          el.textContent?.trim() || "";
+
+        const label = getText(cells[0]);
+        if (!label) continue;
+
+        results.push({
+          label,
+          col1: getText(cells[1]),
+          col2: getText(cells[2]),
+        });
+      }
+
+      return results;
+    });
+
+    if (rows.length === 0) {
+      console.log("Rapportmatrix nicht gefunden.");
+      return;
+    }
+
+    const labelWidth = Math.max(...rows.map((r) => r.label.length));
+    const col1Width = Math.max(6, ...rows.map((r) => r.col1.length));
+
+    console.log("");
+    console.log(
+      "Rapportmatrix".padEnd(labelWidth) +
+        "  " +
+        "Tag".padStart(col1Width) +
+        "  " +
+        "Total"
+    );
+    console.log("-".repeat(labelWidth + col1Width + 12));
+
+    for (const r of rows) {
+      console.log(
+        r.label.padEnd(labelWidth) +
+          "  " +
+          r.col1.padStart(col1Width) +
+          "  " +
+          r.col2
+      );
+    }
+    console.log("");
+
+    // --- Hints ---
+    const entries = await readGridEntries(page);
+    const today = new Date();
+    const todayStr = formatDate(
+      today.toISOString().split("T")[0]
+    );
+
+    // Find weekdays (Mon-Fri) in this week up to today that have no entries
+    const targetDate = new Date(date);
+    const dayOfWeek = targetDate.getDay(); // 0=Sun, 1=Mon, ...
+    const monday = new Date(targetDate);
+    monday.setDate(
+      targetDate.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) - 1)
+    );
+
+    const missingDays: string[] = [];
+    for (let d = new Date(monday); d <= today; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue; // skip weekends
+      const dStr = formatDate(d.toISOString().split("T")[0]);
+      const hasEntry = entries.some((e) => e.datum === dStr);
+      if (!hasEntry) {
+        missingDays.push(dStr);
+      }
+    }
+
+    if (missingDays.length > 0) {
+      console.log(
+        `Du hast an ${missingDays.length} Tag${missingDays.length > 1 ? "en" : ""} nicht gebucht: ${missingDays.join(", ")}`
+      );
+    }
+
+    // Check Differenz for negative hours
+    const diffRow = rows.find((r) => r.label === "Differenz");
+    if (diffRow) {
+      const diff = parseFloat(diffRow.col2.replace(",", "."));
+      if (diff < 0) {
+        const missing = Math.abs(diff);
+        console.log(`Dir fehlen noch ${missing.toFixed(2)} Stunden.`);
+
+        // Suggest command based on last entry
+        const lastEntry = entries[entries.length - 1];
+        if (lastEntry) {
+          // Extract project number (before the dot)
+          const projektNr = lastEntry.projekt.split(".")[0].trim();
+          // Extract leistungsart number
+          const leistungsartNr = lastEntry.leistungsart.split(".")[0].trim();
+          const hours = Math.min(missing, 8);
+          console.log("");
+          console.log("Beispiel:");
+          console.log(
+            `  npx abacus time log --project ${projektNr} --hours ${hours.toFixed(2)} --leistungsart ${leistungsartNr} --text "${lastEntry.text || "..."}" --date ${missingDays.length > 0 ? missingDays[0].split(".").reverse().join("-") : date}`
+          );
+        }
+      }
+    }
+
+    console.log("");
+  } finally {
+    await close();
+  }
+  });
+}
+
+/**
  * List all time entries for a given month.
  * @param monthYear — format "MM.YYYY" e.g. "01.2025"
  */
 export async function listTime(monthYear: string): Promise<void> {
+  return withCaptchaRetry(async () => {
   const { context, close } = await createAuthenticatedContext();
 
   try {
@@ -397,6 +616,7 @@ export async function listTime(monthYear: string): Promise<void> {
   } finally {
     await close();
   }
+  });
 }
 
 /**
@@ -404,6 +624,7 @@ export async function listTime(monthYear: string): Promise<void> {
  * to update the existing entry or create a new one.
  */
 export async function logTime(entry: TimeEntry): Promise<void> {
+  return withCaptchaRetry(async () => {
   const { context, close } = await createAuthenticatedContext();
 
   try {
@@ -455,14 +676,25 @@ export async function logTime(entry: TimeEntry): Promise<void> {
       await fillForm(page, entry);
     }
 
-    // Save
+    // Save — try side panel save button, then fall back to dialog button
     console.log("Saving...");
-    await page.locator('vaadin-button[movie-id="btnSave"]').click();
+    const saveBtn = page.locator('vaadin-button[movie-id="btnSave"]');
+    const dialogSaveBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
+
+    if (await saveBtn.isVisible().catch(() => false)) {
+      await saveBtn.click();
+    } else if (await dialogSaveBtn.isVisible().catch(() => false)) {
+      await dialogSaveBtn.click();
+    } else {
+      console.log("Save button not found. Entry was NOT saved.");
+      return;
+    }
     await waitForVaadin(page);
     console.log("Gespeichert.");
   } finally {
     await close();
   }
+  });
 }
 
 /**
@@ -473,6 +705,7 @@ export async function deleteTime(
   date: string,
   project: string
 ): Promise<void> {
+  return withCaptchaRetry(async () => {
   const { context, close } = await createAuthenticatedContext();
 
   try {
@@ -483,28 +716,69 @@ export async function deleteTime(
     console.log("Reading entries...");
     const allEntries = await readGridEntries(page);
     const targetDate = formatDate(date);
-    const match = allEntries.find(
+    const matches = allEntries.filter(
       (e) => e.datum === targetDate && e.projekt.includes(project)
     );
 
-    if (!match) {
+    if (matches.length === 0) {
       console.log(
         `Kein Eintrag gefunden am ${targetDate} für Projekt ${project}.`
       );
       return;
     }
 
-    console.log(
-      `Gefunden: ${match.anzahl} am ${match.datum} — ${match.projekt}`
-    );
-    console.log(`  Leistungsart: ${match.leistungsart}`);
-    if (match.text) console.log(`  Text: ${match.text}`);
-    console.log("");
+    let match: ExistingEntry;
 
-    const answer = await promptUser("Wirklich löschen? [j/n] ");
-    if (answer !== "j") {
-      console.log("Abgebrochen.");
-      return;
+    if (matches.length === 1) {
+      match = matches[0];
+      console.log(
+        `Gefunden: ${match.anzahl} am ${match.datum} — ${match.projekt}`
+      );
+      console.log(`  Leistungsart: ${match.leistungsart}`);
+      if (match.text) console.log(`  Text: ${match.text}`);
+      console.log("");
+
+      const answer = await promptUser("Wirklich löschen? [j/n] ");
+      if (answer !== "j") {
+        console.log("Abgebrochen.");
+        return;
+      }
+    } else {
+      console.log(
+        `${matches.length} Einträge gefunden am ${targetDate} für Projekt ${project}:`
+      );
+      console.log("");
+      for (let i = 0; i < matches.length; i++) {
+        const m = matches[i];
+        console.log(
+          `  [${i + 1}] ${m.anzahl}  ${m.leistungsart}  ${m.text || "(kein Text)"}`
+        );
+      }
+      console.log("");
+
+      const answer = await promptUser(
+        `Welchen löschen? [1-${matches.length} / a=alle / n=abbrechen] `
+      );
+      if (answer === "n") {
+        console.log("Abgebrochen.");
+        return;
+      }
+      if (answer === "a") {
+        // Delete all matches in reverse order (so rowIndex stays valid)
+        for (let i = matches.length - 1; i >= 0; i--) {
+          console.log(`Lösche Eintrag ${i + 1}/${matches.length}...`);
+          await clickRow(page, matches[i].rowIndex);
+          await deleteSidePanelEntry(page);
+        }
+        console.log(`${matches.length} Einträge gelöscht.`);
+        return;
+      }
+      const idx = parseInt(answer, 10) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= matches.length) {
+        console.log("Ungültige Auswahl. Abgebrochen.");
+        return;
+      }
+      match = matches[idx];
     }
 
     // Open side panel for this entry
@@ -517,4 +791,5 @@ export async function deleteTime(
   } finally {
     await close();
   }
+  });
 }

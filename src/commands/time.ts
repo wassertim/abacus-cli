@@ -1,8 +1,23 @@
 import { Command } from "commander";
-import { logTime, listTime, deleteTime } from "../api";
+import { logTime, listTime, deleteTime, statusTime } from "../api";
 
 export function registerTimeCommands(program: Command): void {
   const time = program.command("time").description("Time tracking commands");
+
+  time
+    .command("status")
+    .description("Show Rapportmatrix (time account status) for a week")
+    .option("--date <YYYY-MM-DD>", "Date within the target week (default: today)")
+    .action(async (options) => {
+      const date = options.date || new Date().toISOString().split("T")[0];
+      try {
+        await statusTime(date);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`Error: ${message}`);
+        process.exit(1);
+      }
+    });
 
   time
     .command("list")
