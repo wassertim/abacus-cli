@@ -1,8 +1,25 @@
 import { Command } from "commander";
-import { logTime } from "../api";
+import { logTime, listTime, deleteTime } from "../api";
 
 export function registerTimeCommands(program: Command): void {
   const time = program.command("time").description("Time tracking commands");
+
+  time
+    .command("list")
+    .description("List time entries for a month")
+    .requiredOption("--monthYear <MM.YYYY>", "Month and year (e.g. 01.2025)")
+    .action(async (options) => {
+      console.log(`Listing entries for ${options.monthYear}...`);
+      console.log("");
+
+      try {
+        await listTime(options.monthYear);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`Error: ${message}`);
+        process.exit(1);
+      }
+    });
 
   time
     .command("log")
@@ -31,6 +48,27 @@ export function registerTimeCommands(program: Command): void {
           date,
           buchungstext: options.text || "",
         });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`Error: ${message}`);
+        process.exit(1);
+      }
+    });
+
+  time
+    .command("delete")
+    .description("Delete a time entry")
+    .requiredOption("--date <YYYY-MM-DD>", "Date of the entry to delete")
+    .requiredOption(
+      "--project <name>",
+      "Project number (e.g. 71100000001)"
+    )
+    .action(async (options) => {
+      console.log(`Deleting entry for ${options.date} / ${options.project}...`);
+      console.log("");
+
+      try {
+        await deleteTime(options.date, options.project);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`Error: ${message}`);
