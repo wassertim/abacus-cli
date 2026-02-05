@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { logTime, listTime, deleteTime, statusTime } from "../api";
 import { t } from "../i18n";
 import { bold, highlight, info, err, fail } from "../ui";
+import { loadAliases, resolveProject, resolveLeistungsart, promptSelect } from "../aliases";
 
 export function registerTimeCommands(program: Command): void {
   const time = program.command("time").description("Time tracking commands");
@@ -41,26 +42,46 @@ export function registerTimeCommands(program: Command): void {
   time
     .command("log")
     .description("Log a time entry")
-    .requiredOption("--project <name>", "Project number (e.g. 71100000001)")
+    .option("--project <name>", "Project number or alias")
     .requiredOption("--hours <n>", "Number of hours", parseFloat)
-    .option("--leistungsart <name>", "Leistungsart / service type (default: 1435)", "1435")
-    .option("--text <text>", "Buchungstext / description")
+    .option("--leistungsart <name>", "Leistungsart / service type (default: 1435)")
+    .requiredOption("--text <text>", "Buchungstext / description")
     .option("--date <YYYY-MM-DD>", "Date (default: today)")
     .action(async (options) => {
       const date = options.date || new Date().toISOString().split("T")[0];
-
-      console.log(bold(t().timeEntryLabel));
-      console.log(`  ${bold("Project:")}       ${highlight(options.project)}`);
-      console.log(`  ${bold(t().leistungsartLabel + ":")}  ${highlight(options.leistungsart)}`);
-      console.log(`  ${bold("Hours:")}         ${highlight(String(options.hours))}`);
-      console.log(`  ${bold("Date:")}          ${highlight(date)}`);
-      if (options.text) console.log(`  ${bold(t().textLabel + ":")}  ${highlight(options.text)}`);
-      console.log("");
+      const aliases = loadAliases();
 
       try {
+        // Interactive project selection if not provided
+        let project: string;
+        if (options.project) {
+          project = resolveProject(options.project);
+        } else {
+          project = await promptSelect("project", aliases.projects);
+        }
+
+        // Interactive leistungsart selection if not provided
+        let leistungsart: string;
+        if (options.leistungsart) {
+          leistungsart = resolveLeistungsart(options.leistungsart);
+        } else if (Object.keys(aliases.leistungsarten).length > 0) {
+          leistungsart = await promptSelect("leistungsart", aliases.leistungsarten);
+        } else {
+          leistungsart = "1435";
+        }
+
+        console.log("");
+        console.log(bold(t().timeEntryLabel));
+        console.log(`  ${bold("Project:")}       ${highlight(project)}`);
+        console.log(`  ${bold(t().leistungsartLabel + ":")}  ${highlight(leistungsart)}`);
+        console.log(`  ${bold("Hours:")}         ${highlight(String(options.hours))}`);
+        console.log(`  ${bold("Date:")}          ${highlight(date)}`);
+        if (options.text) console.log(`  ${bold(t().textLabel + ":")}  ${highlight(options.text)}`);
+        console.log("");
+
         await logTime({
-          project: options.project,
-          leistungsart: options.leistungsart,
+          project,
+          leistungsart,
           hours: options.hours,
           date,
           buchungstext: options.text || "",
@@ -76,16 +97,22 @@ export function registerTimeCommands(program: Command): void {
     .command("delete")
     .description("Delete a time entry")
     .requiredOption("--date <YYYY-MM-DD>", "Date of the entry to delete")
-    .requiredOption(
-      "--project <name>",
-      "Project number (e.g. 71100000001)"
-    )
+    .option("--project <name>", "Project number or alias")
     .action(async (options) => {
-      console.log(info(t().deletingEntryFor(options.date, options.project)));
-      console.log("");
+      const aliases = loadAliases();
 
       try {
-        await deleteTime(options.date, options.project);
+        let project: string;
+        if (options.project) {
+          project = resolveProject(options.project);
+        } else {
+          project = await promptSelect("project", aliases.projects);
+        }
+
+        console.log(info(t().deletingEntryFor(options.date, project)));
+        console.log("");
+
+        await deleteTime(options.date, project);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         fail(err(message));

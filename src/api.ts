@@ -738,21 +738,36 @@ export async function logTime(entry: TimeEntry): Promise<void> {
       await fillForm(page, entry);
     }
 
-    // Save — try side panel save button, then fall back to dialog button
-    spin(t().saving);
-    const saveBtn = page.locator('vaadin-button[movie-id="btnSave"]');
-    const dialogSaveBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
-
-    if (await saveBtn.isVisible().catch(() => false)) {
-      await saveBtn.click();
-    } else if (await dialogSaveBtn.isVisible().catch(() => false)) {
-      await dialogSaveBtn.click();
-    } else {
-      fail(err(t().saveButtonNotFound));
-      return;
-    }
+    // Blur the active field so Vaadin commits pending values to the server
+    await page.keyboard.press("Tab");
     await waitForVaadin(page);
-    succeed(success(t().saved));
+
+    if (config.semiManual) {
+      // Semi-manual mode: form is filled, user saves manually
+      stopSpinner();
+      console.log(bold("Form filled. Save manually in the browser, then press Enter here."));
+      await new Promise<void>((resolve) => {
+        process.stdin.once("data", () => resolve());
+      });
+      succeed(success(t().saved));
+    } else {
+      // Save — try side panel save button, then fall back to dialog button
+      spin(t().saving);
+      const saveBtn = page.locator('vaadin-button[movie-id="btnSave"]');
+      const dialogSaveBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
+
+      if (await saveBtn.isVisible().catch(() => false)) {
+        await saveBtn.click();
+      } else if (await dialogSaveBtn.isVisible().catch(() => false)) {
+        await dialogSaveBtn.click();
+      } else {
+        fail(err(t().saveButtonNotFound));
+        return;
+      }
+      await waitForVaadin(page);
+      await page.waitForTimeout(1000);
+      succeed(success(t().saved));
+    }
   } finally {
     await close();
   }

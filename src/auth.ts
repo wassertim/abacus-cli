@@ -81,7 +81,7 @@ export async function createAuthenticatedContext(): Promise<{
   const storageState = JSON.parse(fs.readFileSync(config.statePath, "utf-8"));
 
   const browser = await chromium.launch({
-    headless: true,
+    headless: config.headless,
     args: STEALTH_ARGS,
   });
   const context = await browser.newContext({

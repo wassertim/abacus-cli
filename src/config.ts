@@ -9,6 +9,8 @@ export const config = {
   abacusUrl:
     process.env.ABACUS_URL || "https://abacus.example.com/portal/myabacus",
   locale: process.env.ABACUS_LOCALE || "",
+  headless: process.env.ABACUS_HEADLESS !== "false",
+  semiManual: process.env.ABACUS_SEMI_MANUAL === "true",
   configDir: CONFIG_DIR,
   statePath: path.join(CONFIG_DIR, "state.json"),
   discoveryPath: path.join(CONFIG_DIR, "api-discovery.json"),

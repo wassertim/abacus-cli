@@ -6,6 +6,7 @@ import chalk from "chalk";
 import { login } from "./auth";
 import { discover } from "./discover";
 import { registerTimeCommands } from "./commands/time";
+import { registerAliasCommands } from "./commands/alias";
 
 const program = new Command();
 
@@ -41,5 +42,6 @@ program
   });
 
 registerTimeCommands(program);
+registerAliasCommands(program);
 
 program.parse();
