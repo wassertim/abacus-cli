@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-abacus-cli is a TypeScript CLI tool that automates time entry logging in the Abacus time tracking system (your-abacus-instance.example.com). Abacus uses Vaadin (server-side Java UI framework) with no REST API, so all interaction is done via **Playwright browser automation**.
+abacus-cli is a TypeScript CLI tool that automates time entry logging in Abacus ERP. Abacus uses Vaadin (server-side Java UI framework) with no REST API, so all interaction is done via **Playwright browser automation**. The target instance URL is configured via the `ABACUS_URL` environment variable.
 
 The project language/UI context is **German** (e.g., Leistungsart, Buchungstext, Wochenrapport).
 
@@ -35,7 +35,7 @@ abacus time log --project <id> --hours <n> [--leistungsart <id>] [--text <text>]
 2. `src/api.ts` — Vaadin browser automation. The key abstraction layer:
    - `waitForVaadin(page)` — Polls `Vaadin.Flow.clients` to ensure no pending server requests before proceeding.
    - `fillCombobox(page, movieId, value)` — Types character-by-character with delays to trigger Vaadin's filter events, then presses Enter to select.
-   - `logTime(entry)` — Full workflow: navigate to page, open dialog, fill form fields, leave browser open for manual review.
+   - `logTime(entry)` — Full workflow: navigate to page, check for duplicates, fill form fields, save automatically.
    - Form fields are identified by Vaadin's `movie-id` attribute (e.g., ProjNr2, LeArtNr, Menge, Text).
 3. `src/config.ts` — Config paths (`~/.abacus-cli/`) and helpers.
 4. `src/commands/time.ts` — The `time log` subcommand with flag parsing.
@@ -46,6 +46,4 @@ abacus time log --project <id> --hours <n> [--leistungsart <id>] [--text <text>]
 ## Development Notes
 
 - The `pages/` directory contains large HTML snapshots of Abacus UI pages, used as reference for understanding Vaadin component structure and `movie-id` selectors.
-- `PLAN.md` tracks the current development roadmap (Phase 4: duplicate checking + edit support via the Leistungen page).
-- Browser stays open for 2 minutes after automation for manual review — there is no auto-save.
 - Vaadin grids are virtualized; only visible rows can be read from the DOM.

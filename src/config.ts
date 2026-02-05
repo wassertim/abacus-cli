@@ -2,10 +2,12 @@ import path from "path";
 import os from "os";
 import fs from "fs";
 
-const CONFIG_DIR = path.join(os.homedir(), ".abacus-cli");
+const CONFIG_DIR =
+  process.env.ABACUS_CONFIG_DIR || path.join(os.homedir(), ".abacus-cli");
 
 export const config = {
-  abacusUrl: "https://your-abacus-instance.example.com/portal/myabacus",
+  abacusUrl:
+    process.env.ABACUS_URL || "https://abacus.example.com/portal/myabacus",
   configDir: CONFIG_DIR,
   statePath: path.join(CONFIG_DIR, "state.json"),
   discoveryPath: path.join(CONFIG_DIR, "api-discovery.json"),

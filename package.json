@@ -1,7 +1,18 @@
 {
   "name": "abacus-cli",
   "version": "0.1.0",
-  "description": "CLI tool for Abacus time tracking via Playwright",
+  "description": "CLI tool for Abacus time tracking via Playwright browser automation",
+  "author": "Tim Petri",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/timpetri/abacus-cli.git"
+  },
+  "homepage": "https://github.com/timpetri/abacus-cli#readme",
+  "bugs": {
+    "url": "https://github.com/timpetri/abacus-cli/issues"
+  },
+  "keywords": ["abacus", "time-tracking", "playwright", "cli", "vaadin", "automation"],
   "main": "dist/index.js",
   "bin": {
     "abacus": "dist/index.js"
