@@ -46,6 +46,11 @@ export interface Translations {
   statusVacationRemaining: string;
   statusVacationPlannedByDec: string;
   statusHoursUnit: string;
+  statusDaysUnit: string;
+  hintQuickActions: string;
+  hintLogSingle: string;
+  hintBatchFill: string;
+  hintBatchGenerate: string;
 
   // --- CLI output: table headers ---
   headerDate: string;
@@ -167,6 +172,11 @@ const de: Translations = {
   statusVacationRemaining: "Restguthaben",
   statusVacationPlannedByDec: "Geplant bis 31. Dez",
   statusHoursUnit: "Stunden",
+  statusDaysUnit: "d",
+  hintQuickActions: "Quick actions",
+  hintLogSingle: "Einzelnen Tag buchen:",
+  hintBatchFill: "Alle fehlenden Tage auf einmal buchen:",
+  hintBatchGenerate: "Vorlage generieren & pro Tag anpassen:",
 
   // Table headers
   headerDate: "Datum",
@@ -296,6 +306,11 @@ const en: Translations = {
   statusVacationRemaining: "Remaining",
   statusVacationPlannedByDec: "Planned by Dec 31",
   statusHoursUnit: "hours",
+  statusDaysUnit: "d",
+  hintQuickActions: "Quick actions",
+  hintLogSingle: "Book a single day:",
+  hintBatchFill: "Book all missing days at once:",
+  hintBatchGenerate: "Generate template & customize per day:",
 
   // Table headers
   headerDate: "Date",
@@ -425,6 +440,11 @@ const fr: Translations = {
   statusVacationRemaining: "Solde restant",
   statusVacationPlannedByDec: "Prévu au 31 déc",
   statusHoursUnit: "heures",
+  statusDaysUnit: "j",
+  hintQuickActions: "Actions rapides",
+  hintLogSingle: "Réserver un seul jour :",
+  hintBatchFill: "Réserver tous les jours manquants :",
+  hintBatchGenerate: "Générer un modèle & personnaliser par jour :",
 
   // Table headers
   headerDate: "Date",
@@ -554,6 +574,11 @@ const it: Translations = {
   statusVacationRemaining: "Saldo residuo",
   statusVacationPlannedByDec: "Previsto al 31 dic",
   statusHoursUnit: "ore",
+  statusDaysUnit: "g",
+  hintQuickActions: "Azioni rapide",
+  hintLogSingle: "Registrare un singolo giorno:",
+  hintBatchFill: "Registrare tutti i giorni mancanti:",
+  hintBatchGenerate: "Generare modello & personalizzare per giorno:",
 
   // Table headers
   headerDate: "Data",
@@ -683,6 +708,11 @@ const es: Translations = {
   statusVacationRemaining: "Saldo restante",
   statusVacationPlannedByDec: "Previsto al 31 dic",
   statusHoursUnit: "horas",
+  statusDaysUnit: "d",
+  hintQuickActions: "Acciones rápidas",
+  hintLogSingle: "Registrar un solo día:",
+  hintBatchFill: "Registrar todos los días faltantes:",
+  hintBatchGenerate: "Generar plantilla y personalizar por día:",
 
   // Table headers
   headerDate: "Fecha",

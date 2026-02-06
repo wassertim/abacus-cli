@@ -43,6 +43,24 @@ export function resolveServiceType(input: string): string {
   return aliases.serviceTypes[input] || input;
 }
 
+/** Find alias name for a project ID, or return null. */
+export function reverseProject(id: string): string | null {
+  const aliases = loadAliases();
+  for (const [name, val] of Object.entries(aliases.projects)) {
+    if (val === id) return name;
+  }
+  return null;
+}
+
+/** Find alias name for a service type ID, or return null. */
+export function reverseServiceType(id: string): string | null {
+  const aliases = loadAliases();
+  for (const [name, val] of Object.entries(aliases.serviceTypes)) {
+    if (val === id) return name;
+  }
+  return null;
+}
+
 /**
  * Interactive arrow-key list selector.
  * Returns the resolved ID (value, not the alias key).

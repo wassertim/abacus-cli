@@ -33,6 +33,7 @@ import {
   toMonthYear,
 } from "./page";
 import { waitForVaadin } from "./vaadin";
+import { reverseProject, reverseServiceType } from "./aliases";
 
 export type { TimeEntry, ExistingEntry } from "./page";
 export { formatDate, toMonthYear } from "./page";
@@ -105,6 +106,12 @@ function fmtSignedHours(n: number): string {
   if (n > 0) return `+${n.toFixed(2)}`;
   if (n < 0) return `${n.toFixed(2)}`;
   return "0.00";
+}
+
+/** Format hours with days in parentheses, e.g. "40.00 hours (5.0d)". */
+function fmtHoursAndDays(n: number): string {
+  const days = n / 8;
+  return `${fmtHours(n)} ${t().statusHoursUnit} (${days.toFixed(1)}${t().statusDaysUnit})`;
 }
 
 /** Get short weekday name using Intl (locale-aware, e.g. Mon/Di/Lun). */
@@ -193,31 +200,43 @@ export async function statusTime(date: string): Promise<void> {
     if (saldo) {
       console.log("");
       console.log(bold(t().statusBalancesHeader));
-      console.log(`  ${pad(t().statusOvertime + ":", LABEL_WIDTH)} ${fmtSignedHours(saldo.overtime)} ${t().statusHoursUnit}`);
-      console.log(`  ${pad(t().statusExtraTime + ":", LABEL_WIDTH)} ${fmtSignedHours(saldo.extraTime)} ${t().statusHoursUnit}`);
+      console.log(`  ${pad(t().statusOvertime + ":", LABEL_WIDTH)} ${fmtSignedHours(saldo.overtime)} ${t().statusHoursUnit} (${(saldo.overtime / 8).toFixed(1)}${t().statusDaysUnit})`);
+      console.log(`  ${pad(t().statusExtraTime + ":", LABEL_WIDTH)} ${fmtSignedHours(saldo.extraTime)} ${t().statusHoursUnit} (${(saldo.extraTime / 8).toFixed(1)}${t().statusDaysUnit})`);
     }
 
     // --- Vacation (Ferien) ---
     if (vacation) {
       console.log("");
       console.log(bold(t().statusVacationHeader));
-      console.log(`  ${pad(t().statusVacationRemaining + ":", LABEL_WIDTH)} ${fmtHours(vacation.remaining)} / ${fmtHours(vacation.entitlement)} ${t().statusHoursUnit}`);
-      console.log(`  ${pad(t().statusVacationPlannedByDec + ":", LABEL_WIDTH)} ${fmtHours(vacation.plannedByYearEnd)} ${t().statusHoursUnit}`);
+      console.log(`  ${pad(t().statusVacationRemaining + ":", LABEL_WIDTH)} ${fmtHours(vacation.remaining)} / ${fmtHours(vacation.entitlement)} ${t().statusHoursUnit} (${(vacation.remaining / 8).toFixed(1)} / ${(vacation.entitlement / 8).toFixed(1)}${t().statusDaysUnit})`);
+      console.log(`  ${pad(t().statusVacationPlannedByDec + ":", LABEL_WIDTH)} ${fmtHoursAndDays(vacation.plannedByYearEnd)}`);
     }
 
-    // --- Example command hint ---
+    // --- Example command hints ---
     if (weekly.difference < 0) {
       const missing = Math.abs(weekly.difference);
       const lastEntry = entries[entries.length - 1];
       if (lastEntry) {
-        const projectNr = lastEntry.project.split(".")[0].trim();
-        const serviceTypeNr = lastEntry.serviceType.split(".")[0].trim();
+        const projectArg = reverseProject(lastEntry.project) || lastEntry.project;
+        const serviceTypeArg = reverseServiceType(lastEntry.serviceType) || lastEntry.serviceType;
         const hours = Math.min(missing, 8);
+        const text = lastEntry.text || "...";
+        const toIso = (d: string) => d.split(".").reverse().join("-");
         const targetDateStr = missingDayDates.length > 0
-          ? missingDayDates[0].split(".").reverse().join("-")
+          ? toIso(missingDayDates[0])
           : date;
         console.log("");
-        console.log(dim(`  npx abacus time log --project ${projectNr} --hours ${hours.toFixed(2)} --service-type ${serviceTypeNr} --text "${lastEntry.text || "..."}" --date ${targetDateStr}`));
+        console.log(dim(`  💡 ${t().hintQuickActions}`));
+        console.log(dim(`  ${t().hintLogSingle}`));
+        console.log(info(`    npx abacus time log --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}" --date ${targetDateStr}`));
+        if (missingDayDates.length > 1) {
+          console.log(dim(`  ${t().hintBatchFill}`));
+          console.log(info(`    npx abacus time batch --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}"`));
+          console.log(dim(`  ${t().hintBatchGenerate}`));
+          console.log(info(`    npx abacus time batch --generate`));
+          console.log(info(`    code batch.json`));
+          console.log(info(`    npx abacus time batch --file batch.json`));
+        }
       }
     }
 
