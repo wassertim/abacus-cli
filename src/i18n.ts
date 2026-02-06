@@ -126,6 +126,17 @@ export interface Translations {
   dryRunSkip: string;
   dryRunExisting: string;
   dryRunSummary: (newCount: number, skipCount: number, existingCount: number) => string;
+
+  // --- CLI output: summary / check ---
+  summaryLine1: (weekNum: string, worked: string, target: string, remaining: string, missingDays: string) => string;
+  summaryLine2: (overtime: string, overtimeDays: string, vacationDays: string) => string;
+  summaryUpdatedAgo: (ago: string) => string;
+  summaryFetching: string;
+  checkWarning: (missingDays: string, remaining: string) => string;
+  checkReminder: string;
+  timeAgoMinutes: (n: number) => string;
+  timeAgoHours: (n: number) => string;
+  timeAgoDays: (n: number) => string;
 }
 
 const de: Translations = {
@@ -260,6 +271,19 @@ const de: Translations = {
   dryRunSkip: "übersprungen",
   dryRunExisting: "vorhanden",
   dryRunSummary: (n, s, e) => `${n} neu, ${s} übersprungen (Duplikat), ${e} vorhanden.`,
+
+  // Summary / check
+  summaryLine1: (weekNum, worked, target, remaining, missingDays) =>
+    `KW ${weekNum} · ${worked} / ${target}h · ${remaining}h verbleibend${missingDays ? ` · ${missingDays} fehlt` : ""}`,
+  summaryLine2: (overtime, overtimeDays, vacationDays) =>
+    `Überstunden: ${overtime}h (${overtimeDays}d) · Ferien: ${vacationDays}d übrig`,
+  summaryUpdatedAgo: (ago) => `(aktualisiert vor ${ago})`,
+  summaryFetching: "Status wird abgerufen...",
+  checkWarning: (missingDays, remaining) => `Abacus: ${missingDays} nicht gebucht — ${remaining}h verbleibend diese Woche`,
+  checkReminder: "Sind deine Stunden diese Woche eingetragen? Prüfe mit: abacus summary",
+  timeAgoMinutes: (n) => `${n}min`,
+  timeAgoHours: (n) => `${n}h`,
+  timeAgoDays: (n) => `${n}d`,
 };
 
 const en: Translations = {
@@ -394,6 +418,19 @@ const en: Translations = {
   dryRunSkip: "skip",
   dryRunExisting: "exists",
   dryRunSummary: (n, s, e) => `${n} new, ${s} skipped (duplicate), ${e} existing.`,
+
+  // Summary / check
+  summaryLine1: (weekNum, worked, target, remaining, missingDays) =>
+    `Week ${weekNum} · ${worked} / ${target}h · ${remaining}h remaining${missingDays ? ` · ${missingDays} missing` : ""}`,
+  summaryLine2: (overtime, overtimeDays, vacationDays) =>
+    `Overtime: ${overtime}h (${overtimeDays}d) · Vacation: ${vacationDays}d left`,
+  summaryUpdatedAgo: (ago) => `(updated ${ago} ago)`,
+  summaryFetching: "Fetching status...",
+  checkWarning: (missingDays, remaining) => `Abacus: ${missingDays} not logged — ${remaining}h remaining this week`,
+  checkReminder: "Did you log your hours this week? Check with: abacus summary",
+  timeAgoMinutes: (n) => `${n}min`,
+  timeAgoHours: (n) => `${n}h`,
+  timeAgoDays: (n) => `${n}d`,
 };
 
 const fr: Translations = {
@@ -528,6 +565,19 @@ const fr: Translations = {
   dryRunSkip: "ignoré",
   dryRunExisting: "existant",
   dryRunSummary: (n, s, e) => `${n} nouveau${n > 1 ? "x" : ""}, ${s} ignoré${s > 1 ? "s" : ""} (doublon), ${e} existant${e > 1 ? "s" : ""}.`,
+
+  // Summary / check
+  summaryLine1: (weekNum, worked, target, remaining, missingDays) =>
+    `Sem. ${weekNum} · ${worked} / ${target}h · ${remaining}h restant${missingDays ? ` · ${missingDays} manquant` : ""}`,
+  summaryLine2: (overtime, overtimeDays, vacationDays) =>
+    `Heures sup.: ${overtime}h (${overtimeDays}j) · Vacances: ${vacationDays}j restant`,
+  summaryUpdatedAgo: (ago) => `(mis à jour il y a ${ago})`,
+  summaryFetching: "Récupération du statut...",
+  checkWarning: (missingDays, remaining) => `Abacus: ${missingDays} non enregistré — ${remaining}h restant cette semaine`,
+  checkReminder: "Avez-vous enregistré vos heures cette semaine ? Vérifiez avec : abacus summary",
+  timeAgoMinutes: (n) => `${n}min`,
+  timeAgoHours: (n) => `${n}h`,
+  timeAgoDays: (n) => `${n}j`,
 };
 
 const it: Translations = {
@@ -662,6 +712,19 @@ const it: Translations = {
   dryRunSkip: "ignorato",
   dryRunExisting: "esistente",
   dryRunSummary: (n, s, e) => `${n} nuov${n > 1 ? "i" : "o"}, ${s} ignorat${s > 1 ? "i" : "o"} (duplicato), ${e} esistent${e > 1 ? "i" : "e"}.`,
+
+  // Summary / check
+  summaryLine1: (weekNum, worked, target, remaining, missingDays) =>
+    `Sett. ${weekNum} · ${worked} / ${target}h · ${remaining}h rimanent${missingDays ? ` · ${missingDays} mancante` : ""}`,
+  summaryLine2: (overtime, overtimeDays, vacationDays) =>
+    `Straordinario: ${overtime}h (${overtimeDays}g) · Ferie: ${vacationDays}g rimanenti`,
+  summaryUpdatedAgo: (ago) => `(aggiornato ${ago} fa)`,
+  summaryFetching: "Recupero dello stato...",
+  checkWarning: (missingDays, remaining) => `Abacus: ${missingDays} non registrato — ${remaining}h rimanenti questa settimana`,
+  checkReminder: "Hai registrato le ore questa settimana? Controlla con: abacus summary",
+  timeAgoMinutes: (n) => `${n}min`,
+  timeAgoHours: (n) => `${n}h`,
+  timeAgoDays: (n) => `${n}g`,
 };
 
 const es: Translations = {
@@ -796,6 +859,19 @@ const es: Translations = {
   dryRunSkip: "omitido",
   dryRunExisting: "existente",
   dryRunSummary: (n, s, e) => `${n} nuevo${n > 1 ? "s" : ""}, ${s} omitido${s > 1 ? "s" : ""} (duplicado), ${e} existente${e > 1 ? "s" : ""}.`,
+
+  // Summary / check
+  summaryLine1: (weekNum, worked, target, remaining, missingDays) =>
+    `Sem. ${weekNum} · ${worked} / ${target}h · ${remaining}h restante${missingDays ? ` · ${missingDays} faltante` : ""}`,
+  summaryLine2: (overtime, overtimeDays, vacationDays) =>
+    `Horas extra: ${overtime}h (${overtimeDays}d) · Vacaciones: ${vacationDays}d restante`,
+  summaryUpdatedAgo: (ago) => `(actualizado hace ${ago})`,
+  summaryFetching: "Obteniendo estado...",
+  checkWarning: (missingDays, remaining) => `Abacus: ${missingDays} no registrado — ${remaining}h restante esta semana`,
+  checkReminder: "¿Registraste tus horas esta semana? Verifica con: abacus summary",
+  timeAgoMinutes: (n) => `${n}min`,
+  timeAgoHours: (n) => `${n}h`,
+  timeAgoDays: (n) => `${n}d`,
 };
 
 const locales: Record<Locale, Translations> = { de, en, fr, it, es };

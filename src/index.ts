@@ -3,12 +3,13 @@
 import "dotenv/config";
 import { Command } from "commander";
 import chalk from "chalk";
+import * as fs from "fs";
 import { login, refresh, installRefreshDaemon, uninstallRefreshDaemon } from "./auth";
 import { discover } from "./discover";
 import { registerTimeCommands } from "./commands/time";
 import { registerAliasCommands } from "./commands/alias";
 import { config, saveConfigFile, getConfigFilePath } from "./config";
-import { getLocale, localeSource } from "./i18n";
+import { getLocale, localeSource, t } from "./i18n";
 
 const program = new Command();
 
@@ -114,6 +115,108 @@ configCmd
     for (const e of entries) {
       console.log(`  ${chalk.cyan(e.key.padEnd(12))} ${e.value}  ${chalk.dim(`[${e.source}]`)}`);
     }
+  });
+
+// --- Helper: read status cache ---
+function readStatusCache(): Record<string, unknown> | null {
+  try {
+    return JSON.parse(fs.readFileSync(config.statusCachePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+function getISOWeekNumber(d: Date): number {
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  return Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+function isCacheCurrentWeek(cache: Record<string, unknown>): boolean {
+  const cacheWeek = cache.weekNumber as number;
+  const currentWeek = getISOWeekNumber(new Date());
+  return cacheWeek === currentWeek;
+}
+
+function formatTimeAgo(isoDate: string): string {
+  const diffMs = Date.now() - new Date(isoDate).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 60) return t().timeAgoMinutes(Math.max(1, mins));
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return t().timeAgoHours(hours);
+  return t().timeAgoDays(Math.floor(hours / 24));
+}
+
+function printSummary(cache: Record<string, unknown>): void {
+  const weekNum = String(cache.weekNumber as number).padStart(2, "0");
+  const worked = (cache.worked as number).toFixed(1);
+  const target = (cache.target as number).toFixed(0);
+  const remaining = (cache.remaining as number).toFixed(1);
+  const missingDays = cache.missingDays as Array<{ date: string; dayName: string }>;
+  const missingStr = missingDays.length > 0 ? missingDays.map((d) => d.dayName).join(", ") : "";
+
+  console.log(t().summaryLine1(weekNum, worked, target, remaining, missingStr));
+
+  const saldo = cache.saldo as { overtime: number; extraTime: number; total: number } | null;
+  const vacation = cache.vacation as { remainingDays: number; entitlementDays: number } | null;
+
+  if (saldo || vacation) {
+    const overtime = saldo ? (saldo.overtime >= 0 ? "+" : "") + saldo.overtime.toFixed(1) : "+0.0";
+    const overtimeDays = saldo ? (saldo.overtime / 8).toFixed(1) : "0.0";
+    const vacDays = vacation ? vacation.remainingDays.toFixed(1) : "0.0";
+    console.log(t().summaryLine2(overtime, overtimeDays, vacDays));
+  }
+
+  console.log(chalk.dim(t().summaryUpdatedAgo(formatTimeAgo(cache.updatedAt as string))));
+}
+
+program
+  .command("summary")
+  .description("Print compact weekly status (auto-fetches if needed)")
+  .action(async () => {
+    const cache = readStatusCache();
+
+    if (cache && cache.updatedAt && isCacheCurrentWeek(cache)) {
+      printSummary(cache);
+      return;
+    }
+
+    // Cache missing or from a different week — auto-fetch
+    try {
+      const { statusTime } = await import("./api");
+      await statusTime(new Date().toISOString().split("T")[0]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(message));
+      process.exit(1);
+    }
+
+    // Print compact summary from the freshly written cache
+    const freshCache = readStatusCache();
+    if (freshCache) {
+      console.log("");
+      printSummary(freshCache);
+    }
+  });
+
+program
+  .command("check")
+  .description("Silent check for missing days (for .zshrc)")
+  .action(() => {
+    const cache = readStatusCache();
+
+    if (!cache || !cache.updatedAt || !isCacheCurrentWeek(cache)) {
+      console.log(chalk.dim(t().checkReminder));
+      return;
+    }
+
+    const missingDays = cache.missingDays as Array<{ date: string; dayName: string }>;
+    if (!missingDays || missingDays.length === 0) return;
+
+    const remaining = cache.remaining as number;
+    const missingStr = missingDays.map((d) => d.dayName).join(", ");
+    console.log(chalk.yellow(`⚠ ${t().checkWarning(missingStr, remaining.toFixed(1))}`));
   });
 
 registerTimeCommands(program);

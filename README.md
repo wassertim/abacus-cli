@@ -16,6 +16,7 @@ git clone https://github.com/youruser/abacus-cli.git
 cd abacus-cli
 npm install
 npm run build
+npm link          # makes `abacus` available globally
 ```
 
 ### Configuration
@@ -38,13 +39,13 @@ export ABACUS_URL="https://your-abacus-instance.example.com/portal/myabacus"
 Opens a real browser window for manual login. Session cookies are persisted locally so subsequent commands run headlessly.
 
 ```bash
-npx abacus login
+abacus login
 ```
 
 ### Log time
 
 ```bash
-npx abacus time log --project 71100000001 --hours 8 --service-type 1435 --text "Development" --date 2025-01-15
+abacus time log --project 71100000001 --hours 8 --service-type 1435 --text "Development" --date 2025-01-15
 ```
 
 | Flag | Required | Default | Description |
@@ -60,7 +61,7 @@ If a matching entry (same date + project) already exists, you'll be prompted to 
 ### List entries
 
 ```bash
-npx abacus time list --monthYear 01.2025
+abacus time list --monthYear 01.2025
 ```
 
 ### Weekly status
@@ -68,7 +69,7 @@ npx abacus time list --monthYear 01.2025
 Shows the time report (weekly summary) for the week containing the given date, plus hints about missing days and remaining hours.
 
 ```bash
-npx abacus time status --date 2025-01-15
+abacus time status --date 2025-01-15
 ```
 
 ### Batch create entries
@@ -79,30 +80,30 @@ Create multiple time entries in a single browser session — much faster than ru
 
 ```bash
 # Fill current week (Mon-Fri)
-npx abacus time batch --project 71100000001 --hours 8 --service-type 1435 --text "Development"
+abacus time batch --project 71100000001 --hours 8 --service-type 1435 --text "Development"
 
 # Fill specific date range
-npx abacus time batch --from 2026-01-26 --to 2026-01-30 --project 71100000001 --hours 8 --text "Dev"
+abacus time batch --from 2026-01-26 --to 2026-01-30 --project 71100000001 --hours 8 --text "Dev"
 
 # Preview what would be created
-npx abacus time batch --project 71100000001 --hours 8 --text "Dev" --dry-run
+abacus time batch --project 71100000001 --hours 8 --text "Dev" --dry-run
 ```
 
 **Generate template** — finds missing days and writes a pre-filled file:
 
 ```bash
-npx abacus time batch --generate
-npx abacus time batch --generate --from 2026-01-26 --to 2026-01-30 --out entries.json
+abacus time batch --generate
+abacus time batch --generate --from 2026-01-26 --to 2026-01-30 --out entries.json
 # Edit the file, then import it
-npx abacus time batch --file entries.json
+abacus time batch --file entries.json
 ```
 
 **File import** — create entries from a JSON or CSV file:
 
 ```bash
-npx abacus time batch --file entries.json
-npx abacus time batch --file entries.csv
-npx abacus time batch --file entries.json --include-weekends
+abacus time batch --file entries.json
+abacus time batch --file entries.csv
+abacus time batch --file entries.json --include-weekends
 ```
 
 JSON format:
@@ -139,7 +140,7 @@ Duplicate detection: entries with the same date + project as an existing entry a
 **Interactive mode** — run without flags to select entries from the current month:
 
 ```bash
-npx abacus time delete
+abacus time delete
 ```
 
 This opens a checkbox picker with all entries for the current month. Navigate with arrow keys, toggle with space, `a` to select all, and enter to confirm. Selected entries are deleted in one browser session.
@@ -147,7 +148,7 @@ This opens a checkbox picker with all entries for the current month. Navigate wi
 **Targeted mode** — delete a specific entry by date and project:
 
 ```bash
-npx abacus time delete --date 2025-01-15 --project 71100000001
+abacus time delete --date 2025-01-15 --project 71100000001
 ```
 
 | Flag | Required | Description |
@@ -155,12 +156,44 @@ npx abacus time delete --date 2025-01-15 --project 71100000001
 | `--date <YYYY-MM-DD>` | no | Date of the entry (required if `--project` is used) |
 | `--project <id>` | no | Project number or alias |
 
+### Summary
+
+Prints a compact one-line weekly status. Reads from a local cache written by `time status` — if the cache is missing or from a previous week, it auto-fetches fresh data (opens browser, ~10s).
+
+```bash
+abacus summary
+```
+
+```
+Week 06 · 32.5 / 40h · 7.5h remaining · Wed, Thu missing
+Overtime: +12.5h (1.6d) · Vacation: 15.0d left
+(updated 2h ago)
+```
+
+### Check
+
+Silent check designed for `.zshrc`. Prints a warning only when there are missing days this week. If the cache is missing or stale, prints a gentle reminder instead.
+
+```bash
+abacus check
+```
+
+```
+⚠ Abacus: Wed, Thu not logged — 7.5h remaining this week
+```
+
+Add to your `~/.zshrc` for a greeting reminder:
+
+```bash
+abacus check 2>/dev/null
+```
+
 ### Discover API calls
 
 Captures network requests while you interact with Abacus manually. Useful for understanding Vaadin's communication protocol.
 
 ```bash
-npx abacus discover
+abacus discover
 ```
 
 ## How it works

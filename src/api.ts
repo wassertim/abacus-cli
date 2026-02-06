@@ -3,7 +3,7 @@
 
 import Table from "cli-table3";
 import { createAuthenticatedContext } from "./auth";
-import { config } from "./config";
+import { config, ensureConfigDir } from "./config";
 import { t, getLocale, confirmDeleteKey } from "./i18n";
 import * as fs from "fs";
 import chalk from "chalk";
@@ -127,16 +127,16 @@ function printHints(entries: ExistingEntry[], missingDayDates: string[], hours: 
   console.log(dim(`  💡 ${t().hintQuickActions}`));
   console.log("");
   console.log(dim(`  ${t().hintLogSingle}`));
-  console.log(info(`    npx abacus time log --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}" --date ${targetDate}`));
+  console.log(info(`    abacus time log --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}" --date ${targetDate}`));
   if (missingDayDates.length > 1) {
     console.log("");
     console.log(dim(`  ${t().hintBatchFill}`));
-    console.log(info(`    npx abacus time batch --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}"`));
+    console.log(info(`    abacus time batch --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}"`));
     console.log("");
     console.log(dim(`  ${t().hintBatchGenerate}`));
-    console.log(info(`    npx abacus time batch --generate`));
+    console.log(info(`    abacus time batch --generate`));
     console.log(info(`    code batch.json`));
-    console.log(info(`    npx abacus time batch --file batch.json`));
+    console.log(info(`    abacus time batch --file batch.json`));
   }
   console.log("");
 }
@@ -237,6 +237,34 @@ export async function statusTime(date: string): Promise<void> {
       console.log(bold(t().statusVacationHeader));
       console.log(`  ${pad(t().statusVacationRemaining + ":", LABEL_WIDTH)} ${fmtHours(vacation.remaining)} / ${fmtHours(vacation.entitlement)} ${t().statusHoursUnit} (${(vacation.remaining / 8).toFixed(1)} / ${(vacation.entitlement / 8).toFixed(1)}${t().statusDaysUnit})`);
       console.log(`  ${pad(t().statusVacationPlannedByDec + ":", LABEL_WIDTH)} ${fmtHoursAndDays(vacation.plannedByYearEnd)}`);
+    }
+
+    // --- Write status cache ---
+    try {
+      ensureConfigDir();
+      const cache = {
+        updatedAt: new Date().toISOString(),
+        weekNumber: weekNum,
+        monday: fmtFull(monday),
+        friday: fmtFull(friday),
+        worked: weekly.worked,
+        target: weekly.target,
+        remaining,
+        missingDays: missingDayNames.map((name, i) => ({
+          date: missingDayDates[i],
+          dayName: name,
+        })),
+        saldo: saldo ? { overtime: saldo.overtime, extraTime: saldo.extraTime, total: saldo.total } : null,
+        vacation: vacation ? {
+          remaining: vacation.remaining,
+          entitlement: vacation.entitlement,
+          remainingDays: parseFloat((vacation.remaining / 8).toFixed(1)),
+          entitlementDays: parseFloat((vacation.entitlement / 8).toFixed(1)),
+        } : null,
+      };
+      fs.writeFileSync(config.statusCachePath, JSON.stringify(cache, null, 2) + "\n");
+    } catch {
+      // Cache write failure is non-critical, silently ignore
     }
 
     // --- Example command hints ---
