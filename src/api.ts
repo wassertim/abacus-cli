@@ -4,7 +4,7 @@
 import Table from "cli-table3";
 import { createAuthenticatedContext } from "./auth";
 import { config } from "./config";
-import { t, confirmDeleteKey } from "./i18n";
+import { t, getLocale, confirmDeleteKey } from "./i18n";
 import * as fs from "fs";
 import chalk from "chalk";
 import {
@@ -18,6 +18,10 @@ import {
   setMonthFilter,
   setWeekFilter,
   readGridEntries,
+  navigateToWochenrapport,
+  readWeeklyReport,
+  readSaldoPanel,
+  readVacationPanel,
   clickRow,
   fillForm,
   deleteSidePanelEntry,
@@ -74,6 +78,40 @@ export async function fetchExistingEntries(dates: string[]): Promise<ExistingEnt
   });
 }
 
+// ---------------------------------------------------------------------------
+// Status helpers
+// ---------------------------------------------------------------------------
+
+/** Get ISO week number for a date. */
+function getISOWeekNumber(d: Date): number {
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  return Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+/** Right-pad a label to a fixed width. */
+function pad(label: string, width: number): string {
+  return label.padEnd(width);
+}
+
+/** Format hours as "8.00". */
+function fmtHours(n: number): string {
+  return n.toFixed(2);
+}
+
+/** Format signed hours: positive with "+", negative with "−". */
+function fmtSignedHours(n: number): string {
+  if (n > 0) return `+${n.toFixed(2)}`;
+  if (n < 0) return `${n.toFixed(2)}`;
+  return "0.00";
+}
+
+/** Get short weekday name using Intl (locale-aware, e.g. Mon/Di/Lun). */
+function shortDayName(d: Date, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(d);
+}
+
 /**
  * Show the time report (weekly status) for the week containing the given date.
  * @param date — format "YYYY-MM-DD", defaults to today
@@ -84,115 +122,102 @@ export async function statusTime(date: string): Promise<void> {
 
   try {
     const page = await context.newPage();
+
+    // 1. Navigate to Leistungen first (sets up session + filters)
     await navigateToLeistungen(page);
     await setWeekFilter(page, date);
 
     spin(t().readingTimeReport);
 
-    const rows = await page.evaluate(() => {
-      const panel = document.querySelector(
-        'vaadin-vertical-layout[movie-id="id_pnl_matrixView"]'
-      );
-      if (!panel) return [];
+    // 2. Read grid entries for missing-days detection
+    const entries = await readGridEntries(page);
 
-      const flexRows = panel.querySelectorAll("div.va-flex-layout");
-      const results: { label: string; col1: string; col2: string }[] = [];
+    // 3. Navigate to Wochenrapport for weekly totals, saldo, vacation
+    await navigateToWochenrapport(page);
 
-      for (const row of Array.from(flexRows)) {
-        const cells = row.querySelectorAll(
-          "div.va-html-label, div.va-label"
-        );
-        if (cells.length < 3) continue;
+    const weekly = await readWeeklyReport(page);
+    const saldo = await readSaldoPanel(page);
+    const vacation = await readVacationPanel(page);
 
-        const getText = (el: Element): string =>
-          el.textContent?.trim() || "";
-
-        const label = getText(cells[0]);
-        if (!label) continue;
-
-        results.push({
-          label,
-          col1: getText(cells[1]),
-          col2: getText(cells[2]),
-        });
-      }
-
-      return results;
-    });
-
-    if (rows.length === 0) {
+    if (!weekly) {
       fail(err(t().timeReportNotFound));
       return;
     }
 
     stopSpinner();
 
-    const table = new Table({
-      head: [t().timeReportTitle, t().colDay, t().colTotal],
-      style: { head: ["cyan"] },
-    });
+    const locale = getLocale();
+    const LABEL_WIDTH = 22;
 
-    for (const r of rows) {
-      table.push([r.label, r.col1, r.col2]);
-    }
+    // --- Week header ---
+    const targetDate = new Date(date);
+    const dayOfWeek = targetDate.getDay();
+    const monday = new Date(targetDate);
+    monday.setDate(targetDate.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) - 1));
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+
+    const weekNum = getISOWeekNumber(targetDate);
+    const fmtDayMonth = (d: Date) => `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.`;
+    const fmtFull = (d: Date) => `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 
     console.log("");
-    console.log(table.toString());
+    console.log(bold(t().statusWeekHeader(weekNum, fmtDayMonth(monday), fmtFull(friday))));
+    console.log("");
 
-    // --- Hints ---
-    const entries = await readGridEntries(page);
+    // --- Worked / Remaining ---
+    const remaining = Math.max(0, weekly.target - weekly.worked);
+    console.log(`  ${pad(t().statusWorked + ":", LABEL_WIDTH)} ${bold(fmtHours(weekly.worked))} / ${fmtHours(weekly.target)} ${t().statusHoursUnit}`);
+    console.log(`  ${pad(t().statusRemaining + ":", LABEL_WIDTH)} ${remaining > 0 ? warn(fmtHours(remaining)) : fmtHours(remaining)} ${t().statusHoursUnit}`);
+
+    // --- Missing days ---
     const today = new Date();
-    const todayStr = formatDate(
-      today.toISOString().split("T")[0]
-    );
-
-    // Find weekdays (Mon-Fri) in this week up to today that have no entries
-    const targetDate = new Date(date);
-    const dayOfWeek = targetDate.getDay(); // 0=Sun, 1=Mon, ...
-    const monday = new Date(targetDate);
-    monday.setDate(
-      targetDate.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) - 1)
-    );
-
-    const missingDaysList: string[] = [];
-    for (let d = new Date(monday); d <= today; d.setDate(d.getDate() + 1)) {
+    const missingDayNames: string[] = [];
+    const missingDayDates: string[] = [];
+    for (let d = new Date(monday); d <= today && d <= friday; d.setDate(d.getDate() + 1)) {
       const dow = d.getDay();
-      if (dow === 0 || dow === 6) continue; // skip weekends
+      if (dow === 0 || dow === 6) continue;
       const dStr = formatDate(d.toISOString().split("T")[0]);
       const hasEntry = entries.some((e) => e.date === dStr);
       if (!hasEntry) {
-        missingDaysList.push(dStr);
+        missingDayNames.push(shortDayName(new Date(d), locale));
+        missingDayDates.push(dStr);
       }
     }
 
-    if (missingDaysList.length > 0) {
-      console.log(
-        warn(t().missingDays(missingDaysList.length, missingDaysList.join(", ")))
-      );
+    if (missingDayNames.length > 0) {
+      console.log(`  ${pad(t().statusMissingDaysLabel + ":", LABEL_WIDTH)} ${warn(missingDayNames.join(", "))}`);
     }
 
-    // Check Differenz for negative hours
-    const diffRow = rows.find((r) => r.label === "Differenz");
-    if (diffRow) {
-      const diff = parseFloat(diffRow.col2.replace(",", "."));
-      if (diff < 0) {
-        const missing = Math.abs(diff);
-        console.log(warn(t().missingHours(missing.toFixed(2))));
+    // --- Balances (Saldo) ---
+    if (saldo) {
+      console.log("");
+      console.log(bold(t().statusBalancesHeader));
+      console.log(`  ${pad(t().statusOvertime + ":", LABEL_WIDTH)} ${fmtSignedHours(saldo.overtime)} ${t().statusHoursUnit}`);
+      console.log(`  ${pad(t().statusExtraTime + ":", LABEL_WIDTH)} ${fmtSignedHours(saldo.extraTime)} ${t().statusHoursUnit}`);
+    }
 
-        // Suggest command based on last entry
-        const lastEntry = entries[entries.length - 1];
-        if (lastEntry) {
-          // Extract project number (before the dot)
-          const projectNr = lastEntry.project.split(".")[0].trim();
-          // Extract service type number
-          const serviceTypeNr = lastEntry.serviceType.split(".")[0].trim();
-          const hours = Math.min(missing, 8);
-          console.log("");
-          console.log(bold(t().exampleLabel));
-          console.log(
-            dim(`  npx abacus time log --project ${projectNr} --hours ${hours.toFixed(2)} --service-type ${serviceTypeNr} --text "${lastEntry.text || "..."}" --date ${missingDaysList.length > 0 ? missingDaysList[0].split(".").reverse().join("-") : date}`)
-          );
-        }
+    // --- Vacation (Ferien) ---
+    if (vacation) {
+      console.log("");
+      console.log(bold(t().statusVacationHeader));
+      console.log(`  ${pad(t().statusVacationRemaining + ":", LABEL_WIDTH)} ${fmtHours(vacation.remaining)} / ${fmtHours(vacation.entitlement)} ${t().statusHoursUnit}`);
+      console.log(`  ${pad(t().statusVacationPlannedByDec + ":", LABEL_WIDTH)} ${fmtHours(vacation.plannedByYearEnd)} ${t().statusHoursUnit}`);
+    }
+
+    // --- Example command hint ---
+    if (weekly.difference < 0) {
+      const missing = Math.abs(weekly.difference);
+      const lastEntry = entries[entries.length - 1];
+      if (lastEntry) {
+        const projectNr = lastEntry.project.split(".")[0].trim();
+        const serviceTypeNr = lastEntry.serviceType.split(".")[0].trim();
+        const hours = Math.min(missing, 8);
+        const targetDateStr = missingDayDates.length > 0
+          ? missingDayDates[0].split(".").reverse().join("-")
+          : date;
+        console.log("");
+        console.log(dim(`  npx abacus time log --project ${projectNr} --hours ${hours.toFixed(2)} --service-type ${serviceTypeNr} --text "${lastEntry.text || "..."}" --date ${targetDateStr}`));
       }
     }
 

@@ -432,6 +432,166 @@ export async function saveEntry(page: Page): Promise<void> {
   await page.waitForTimeout(1000);
 }
 
+// ---------------------------------------------------------------------------
+// Wochenrapport navigation & panel readers (for time status)
+// ---------------------------------------------------------------------------
+
+export interface WeeklyReport {
+  worked: number;
+  target: number;
+  difference: number;
+}
+
+export interface SaldoData {
+  overtime: number;
+  extraTime: number;
+  total: number;
+}
+
+export interface VacationData {
+  entitlement: number;
+  used: number;
+  remaining: number;
+  plannedByYearEnd: number;
+  remainingByYearEnd: number;
+}
+
+/** Parse a value like "40.00 STD" or "-5.79" → number. */
+function parseHoursValue(text: string): number {
+  const cleaned = text.replace(/[^\d.,-]/g, "").replace(",", ".");
+  const val = parseFloat(cleaned);
+  return isNaN(val) ? 0 : val;
+}
+
+/** Navigate to the Wochenrapport page. */
+export async function navigateToWochenrapport(page: Page): Promise<void> {
+  const rapportierungToggle = page.locator(
+    'vaadin-button[movie-id="menu-item_rapportierung"]'
+  );
+  const isExpanded = await rapportierungToggle.getAttribute("aria-expanded");
+  if (isExpanded !== "true") {
+    await rapportierungToggle.click();
+    await waitForVaadin(page);
+  }
+  await page.locator('a[href^="proj_weeklyreport"]').click();
+  await waitForVaadin(page);
+}
+
+/**
+ * Read the weekly totals from the Wochenrapport page grid.
+ * The grid is built from individual div.va-flex-layout elements (1 child each).
+ * Pattern: [label] [Mon] [Tue] [Wed] [Thu] [Fri] [Total] [empty]
+ * We scan for label cells and read the Total (6 positions after the label).
+ * Row 0 (after "In & Out" section): Istzeit = worked, then Sollzeit = target, Differenz.
+ */
+export async function readWeeklyReport(page: Page): Promise<WeeklyReport | null> {
+  const data = await page.evaluate(() => {
+    const content = document.querySelector('.va-portal-page-content');
+    if (!content) return null;
+
+    const flexLayouts = Array.from(content.querySelectorAll('div.va-flex-layout'));
+    const texts = flexLayouts.map(fl => fl.textContent?.trim() || "");
+
+    // Find row labels and extract the Total value (6 positions after label)
+    const result: Record<string, string> = {};
+    const labels = ["Istzeit", "Sollzeit", "Differenz"];
+
+    for (let i = 0; i < texts.length; i++) {
+      if (labels.includes(texts[i]) && i + 6 < texts.length) {
+        result[texts[i]] = texts[i + 6];
+      }
+    }
+
+    return result;
+  });
+
+  if (!data || !data["Istzeit"] || !data["Sollzeit"]) return null;
+
+  return {
+    worked: parseHoursValue(data["Istzeit"]),
+    target: parseHoursValue(data["Sollzeit"]),
+    difference: data["Differenz"] ? parseHoursValue(data["Differenz"]) : 0,
+  };
+}
+
+/**
+ * Read the Saldo panel on the Wochenrapport page.
+ * Panel: movie-id="id_pnl_overTime"
+ * Rows: vaadin-horizontal-layout with div.va-label pairs.
+ * Row 0 = Überstunden, Row 1 = Überzeit, Row 2 = Total.
+ */
+export async function readSaldoPanel(page: Page): Promise<SaldoData | null> {
+  const values = await page.evaluate(() => {
+    const panel = document.querySelector(
+      'vaadin-vertical-layout[movie-id="id_pnl_overTime"]'
+    );
+    if (!panel) return null;
+
+    const rows = panel.querySelectorAll(
+      "vaadin-vertical-layout > vaadin-horizontal-layout"
+    );
+    const result: string[] = [];
+
+    for (const row of Array.from(rows)) {
+      const labels = row.querySelectorAll("div.va-label");
+      if (labels.length >= 2) {
+        // Value is the last label's text content
+        const text = labels[labels.length - 1].textContent?.trim() || "0";
+        result.push(text);
+      }
+    }
+
+    return result;
+  });
+
+  if (!values || values.length < 2) return null;
+
+  return {
+    overtime: parseHoursValue(values[0]),
+    extraTime: parseHoursValue(values[1]),
+    total: values.length >= 3 ? parseHoursValue(values[2]) : 0,
+  };
+}
+
+/**
+ * Read the Ferien (vacation) panel on the Wochenrapport page.
+ * Panel: movie-id="id_pnl_holiday"
+ * Rows: Anspruch, Bezug, Restguthaben, Geplanter Bezug per 31.12., Restguthaben per 31.12.
+ */
+export async function readVacationPanel(page: Page): Promise<VacationData | null> {
+  const values = await page.evaluate(() => {
+    const panel = document.querySelector(
+      'vaadin-vertical-layout[movie-id="id_pnl_holiday"]'
+    );
+    if (!panel) return null;
+
+    const rows = panel.querySelectorAll(
+      "vaadin-vertical-layout > vaadin-horizontal-layout"
+    );
+    const result: string[] = [];
+
+    for (const row of Array.from(rows)) {
+      const labels = row.querySelectorAll("div.va-label");
+      if (labels.length >= 2) {
+        const text = labels[labels.length - 1].textContent?.trim() || "0";
+        result.push(text);
+      }
+    }
+
+    return result;
+  });
+
+  if (!values || values.length < 5) return null;
+
+  return {
+    entitlement: parseHoursValue(values[0]),
+    used: parseHoursValue(values[1]),
+    remaining: parseHoursValue(values[2]),
+    plannedByYearEnd: parseHoursValue(values[3]),
+    remainingByYearEnd: parseHoursValue(values[4]),
+  };
+}
+
 /** Format date from YYYY-MM-DD to DD.MM.YYYY */
 export function formatDate(date: string): string {
   const [y, m, d] = date.split("-");

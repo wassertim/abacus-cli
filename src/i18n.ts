@@ -35,12 +35,17 @@ export interface Translations {
   // --- CLI output: status (time report) ---
   readingTimeReport: string;
   timeReportNotFound: string;
-  timeReportTitle: string;
-  colDay: string;
-  colTotal: string;
-  missingDays: (count: number, days: string) => string;
-  missingHours: (hours: string) => string;
-  exampleLabel: string;
+  statusWeekHeader: (weekNum: number, from: string, to: string) => string;
+  statusWorked: string;
+  statusRemaining: string;
+  statusMissingDaysLabel: string;
+  statusBalancesHeader: string;
+  statusOvertime: string;
+  statusExtraTime: string;
+  statusVacationHeader: string;
+  statusVacationRemaining: string;
+  statusVacationPlannedByDec: string;
+  statusHoursUnit: string;
 
   // --- CLI output: table headers ---
   headerDate: string;
@@ -151,13 +156,17 @@ const de: Translations = {
   // Status
   readingTimeReport: "Rapportmatrix wird gelesen...",
   timeReportNotFound: "Rapportmatrix nicht gefunden.",
-  timeReportTitle: "Rapportmatrix",
-  colDay: "Tag",
-  colTotal: "Total",
-  missingDays: (count, days) =>
-    `Du hast an ${count} Tag${count > 1 ? "en" : ""} nicht gebucht: ${days}`,
-  missingHours: (hours) => `Dir fehlen noch ${hours} Stunden.`,
-  exampleLabel: "Beispiel:",
+  statusWeekHeader: (weekNum, from, to) => `Woche ${String(weekNum).padStart(2, "0")} · ${from} – ${to}`,
+  statusWorked: "Gearbeitet",
+  statusRemaining: "Verbleibend",
+  statusMissingDaysLabel: "Fehlende Tage",
+  statusBalancesHeader: "Salden",
+  statusOvertime: "Überstunden",
+  statusExtraTime: "Überzeit",
+  statusVacationHeader: "Ferien",
+  statusVacationRemaining: "Restguthaben",
+  statusVacationPlannedByDec: "Geplant bis 31. Dez",
+  statusHoursUnit: "Stunden",
 
   // Table headers
   headerDate: "Datum",
@@ -276,13 +285,17 @@ const en: Translations = {
   // Status
   readingTimeReport: "Reading time report...",
   timeReportNotFound: "Time report not found.",
-  timeReportTitle: "Time Report",
-  colDay: "Day",
-  colTotal: "Total",
-  missingDays: (count, days) =>
-    `You have ${count} day${count > 1 ? "s" : ""} without entries: ${days}`,
-  missingHours: (hours) => `You are still missing ${hours} hours.`,
-  exampleLabel: "Example:",
+  statusWeekHeader: (weekNum, from, to) => `Week ${String(weekNum).padStart(2, "0")} · ${from} – ${to}`,
+  statusWorked: "Worked",
+  statusRemaining: "Remaining",
+  statusMissingDaysLabel: "Missing days",
+  statusBalancesHeader: "Balances",
+  statusOvertime: "Overtime",
+  statusExtraTime: "Extra time",
+  statusVacationHeader: "Vacation",
+  statusVacationRemaining: "Remaining",
+  statusVacationPlannedByDec: "Planned by Dec 31",
+  statusHoursUnit: "hours",
 
   // Table headers
   headerDate: "Date",
@@ -401,13 +414,17 @@ const fr: Translations = {
   // Status
   readingTimeReport: "Lecture du rapport horaire...",
   timeReportNotFound: "Rapport horaire introuvable.",
-  timeReportTitle: "Rapport horaire",
-  colDay: "Jour",
-  colTotal: "Total",
-  missingDays: (count, days) =>
-    `Vous avez ${count} jour${count > 1 ? "s" : ""} sans entrées: ${days}`,
-  missingHours: (hours) => `Il vous manque encore ${hours} heures.`,
-  exampleLabel: "Exemple:",
+  statusWeekHeader: (weekNum, from, to) => `Semaine ${String(weekNum).padStart(2, "0")} · ${from} – ${to}`,
+  statusWorked: "Travaillé",
+  statusRemaining: "Restant",
+  statusMissingDaysLabel: "Jours manquants",
+  statusBalancesHeader: "Soldes",
+  statusOvertime: "Heures sup.",
+  statusExtraTime: "Heures en plus",
+  statusVacationHeader: "Vacances",
+  statusVacationRemaining: "Solde restant",
+  statusVacationPlannedByDec: "Prévu au 31 déc",
+  statusHoursUnit: "heures",
 
   // Table headers
   headerDate: "Date",
@@ -526,13 +543,17 @@ const it: Translations = {
   // Status
   readingTimeReport: "Lettura del rapporto orario...",
   timeReportNotFound: "Rapporto orario non trovato.",
-  timeReportTitle: "Rapporto orario",
-  colDay: "Giorno",
-  colTotal: "Totale",
-  missingDays: (count, days) =>
-    `Hai ${count} giorn${count > 1 ? "i" : "o"} senza voci: ${days}`,
-  missingHours: (hours) => `Ti mancano ancora ${hours} ore.`,
-  exampleLabel: "Esempio:",
+  statusWeekHeader: (weekNum, from, to) => `Settimana ${String(weekNum).padStart(2, "0")} · ${from} – ${to}`,
+  statusWorked: "Lavorato",
+  statusRemaining: "Rimanente",
+  statusMissingDaysLabel: "Giorni mancanti",
+  statusBalancesHeader: "Saldi",
+  statusOvertime: "Straordinario",
+  statusExtraTime: "Tempo extra",
+  statusVacationHeader: "Ferie",
+  statusVacationRemaining: "Saldo residuo",
+  statusVacationPlannedByDec: "Previsto al 31 dic",
+  statusHoursUnit: "ore",
 
   // Table headers
   headerDate: "Data",
@@ -651,13 +672,17 @@ const es: Translations = {
   // Status
   readingTimeReport: "Leyendo informe horario...",
   timeReportNotFound: "Informe horario no encontrado.",
-  timeReportTitle: "Informe horario",
-  colDay: "Día",
-  colTotal: "Total",
-  missingDays: (count, days) =>
-    `Tienes ${count} día${count > 1 ? "s" : ""} sin entradas: ${days}`,
-  missingHours: (hours) => `Te faltan ${hours} horas.`,
-  exampleLabel: "Ejemplo:",
+  statusWeekHeader: (weekNum, from, to) => `Semana ${String(weekNum).padStart(2, "0")} · ${from} – ${to}`,
+  statusWorked: "Trabajado",
+  statusRemaining: "Restante",
+  statusMissingDaysLabel: "Días sin registrar",
+  statusBalancesHeader: "Saldos",
+  statusOvertime: "Horas extra",
+  statusExtraTime: "Tiempo extra",
+  statusVacationHeader: "Vacaciones",
+  statusVacationRemaining: "Saldo restante",
+  statusVacationPlannedByDec: "Previsto al 31 dic",
+  statusHoursUnit: "horas",
 
   // Table headers
   headerDate: "Fecha",
