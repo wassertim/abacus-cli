@@ -29,13 +29,14 @@ export function registerTimeCommands(program: Command): void {
   time
     .command("list")
     .description("List time entries for a month")
-    .requiredOption("--monthYear <MM.YYYY>", "Month and year (e.g. 01.2025)")
+    .option("--monthYear <MM.YYYY>", "Month and year (e.g. 01.2025, default: current month)")
     .action(async (options) => {
-      console.log(info(t().listingEntries(options.monthYear)));
-      console.log("");
+      const now = new Date();
+      const monthYear = options.monthYear || `${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
+      console.log(info(t().listingEntries(monthYear)));
 
       try {
-        await listTime(options.monthYear);
+        await listTime(monthYear);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         fail(err(message));
@@ -247,7 +248,7 @@ export function registerTimeCommands(program: Command): void {
 
         // --- Dry-run mode ---
         if (options.dryRun) {
-          // Fetch existing entries from Abacus (also detects locale)
+          // Fetch existing entries from Abacus
           const dates = entries.map((e) => e.date);
           const existing = await fetchExistingEntries(dates);
 

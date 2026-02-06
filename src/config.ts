@@ -32,7 +32,9 @@ export const config = {
   abacusUrl:
     process.env.ABACUS_URL ||
     (typeof fileConfig.abacusUrl === "string" ? fileConfig.abacusUrl : ""),
-  locale: process.env.ABACUS_LOCALE || "",
+  locale:
+    process.env.ABACUS_LOCALE ||
+    (typeof fileConfig.locale === "string" ? fileConfig.locale : ""),
   headless: process.env.ABACUS_HEADLESS !== "false",
   semiManual: process.env.ABACUS_SEMI_MANUAL === "true",
   configDir: CONFIG_DIR,
@@ -40,6 +42,7 @@ export const config = {
   statePath: path.join(CONFIG_DIR, "state.json"),
   discoveryPath: path.join(CONFIG_DIR, "api-discovery.json"),
   credentialsPath: path.join(CONFIG_DIR, "api-credentials.json"),
+  statusCachePath: path.join(CONFIG_DIR, "status-cache.json"),
 };
 
 export function ensureConfigDir(): void {

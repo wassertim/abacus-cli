@@ -1,514 +1,50 @@
 // Abacus uses Vaadin (server-side Java framework) with a single UIDL endpoint.
 // There is no REST API. All interactions must go through browser automation.
 
-import { Page } from "rebrowser-playwright-core";
-import * as readline from "readline";
 import Table from "cli-table3";
+import { Page } from "rebrowser-playwright-core";
 import { createAuthenticatedContext } from "./auth";
-import { config } from "./config";
-import { t, detectLocale, setLocale, confirmDeleteKey, Locale } from "./i18n";
+import { config, ensureConfigDir } from "./config";
+import { t, getLocale, confirmDeleteKey } from "./i18n";
 import * as fs from "fs";
 import chalk from "chalk";
 import {
   success, err, warn, info, bold, highlight, dim,
   spin, stopSpinner, succeed, fail,
+  promptUser,
 } from "./ui";
-
-/** Retry wrapper: if FortiADC captcha is solved, retry the operation once. */
-async function withCaptchaRetry<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message === "CAPTCHA_SOLVED_RETRY") {
-      spin(t().captchaRetry);
-      return fn();
-    }
-    throw error;
-  }
-}
-
-export interface TimeEntry {
-  project: string;
-  serviceType: string;
-  hours: number;
-  date: string; // YYYY-MM-DD
-  description: string;
-}
-
-export interface ExistingEntry {
-  date: string;
-  project: string;
-  serviceType: string;
-  text: string;
-  hours: string;
-  status: string;
-  rowIndex: number;
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-/** Wait for Vaadin to finish processing (no pending server requests). */
-async function waitForVaadin(page: Page): Promise<void> {
-  await page.waitForFunction(() => {
-    const vaadin = (window as any).Vaadin;
-    if (!vaadin?.Flow?.clients) return true;
-    return Object.values(vaadin.Flow.clients).every(
-      (client: any) => !client.isActive?.()
-    );
-  }, { timeout: 15_000 });
-}
-
-/** Fill a Vaadin combobox: type char-by-char to filter, wait, press Enter. */
-async function fillCombobox(
-  page: Page,
-  movieId: string,
-  value: string
-): Promise<void> {
-  const combo = page.locator(`vaadin-combo-box[movie-id="${movieId}"]`);
-  const input = combo.locator("input");
-
-  await input.click({ clickCount: 3 });
-  await page.keyboard.press("Backspace");
-
-  await input.pressSequentially(value, { delay: 50 });
-
-  await page.waitForTimeout(1000);
-  await waitForVaadin(page);
-
-  await input.press("Enter");
-  await waitForVaadin(page);
-}
-
-/**
- * Select a Vaadin combobox item by its position (aria-posinset).
- * Opens the dropdown and clicks the item directly — language-independent.
- */
-async function selectComboboxByIndex(
-  page: Page,
-  movieId: string,
-  posinset: number
-): Promise<void> {
-  const combo = page.locator(`vaadin-combo-box[movie-id="${movieId}"]`);
-  const input = combo.locator("input");
-
-  // Open the dropdown
-  await input.click();
-  await page.waitForTimeout(300);
-
-  // Click the item by aria-posinset
-  await page
-    .locator(`vaadin-combo-box-item[aria-posinset="${posinset}"]`)
-    .click();
-  await waitForVaadin(page);
-}
-
-/** Initialize locale: use env var override or auto-detect from the page. */
-async function initLocale(page: Page): Promise<void> {
-  if (config.locale) {
-    setLocale(config.locale as Locale);
-  } else {
-    const detected = await detectLocale(page);
-    setLocale(detected);
-  }
-}
-
-/** Navigate to the services (Leistungen) page via the time tracking menu. */
-async function navigateToLeistungen(page: Page): Promise<void> {
-  spin(t().navigatingToPortal);
-  await page.goto(config.abacusUrl, { waitUntil: "networkidle" });
-
-  // Detect FortiADC captcha redirect
-  if (page.url().includes("fortiadc_captcha")) {
-    fail(warn(t().captchaDetected));
-
-    // Get the browser context to access storageState and relaunch
-    const context = page.context();
-    const state = await context.storageState();
-    const browser = context.browser();
-
-    // Close headless browser
-    if (browser) await browser.close();
-
-    // Relaunch in headed mode
-    const { chromium } = await import("rebrowser-playwright-core");
-    const headedBrowser = await chromium.launch({
-      headless: false,
-      args: [
-        "--disable-blink-features=AutomationControlled",
-        "--no-first-run",
-      ],
-    });
-    const headedContext = await headedBrowser.newContext({
-      storageState: state,
-      viewport: { width: 1280, height: 800 },
-    });
-    const headedPage = await headedContext.newPage();
-    await headedPage.goto(config.abacusUrl, { waitUntil: "networkidle" });
-
-    console.log(t().captchaSolve);
-    console.log(t().captchaWaiting);
-
-    // Wait for captcha to be solved and portal to load
-    await headedPage.waitForFunction(
-      () => !window.location.href.includes("fortiadc_captcha"),
-      { timeout: 120_000 }
-    );
-    await waitForVaadin(headedPage);
-
-    // Save updated session state (with captcha cookie)
-    const newState = await headedContext.storageState();
-    const fs = await import("fs");
-    const { config: cfg } = await import("./config");
-    fs.writeFileSync(cfg.statePath, JSON.stringify(newState, null, 2));
-
-    await headedBrowser.close();
-
-    // Throw a special error to retry the whole operation
-    throw new Error("CAPTCHA_SOLVED_RETRY");
-  }
-
-  await waitForVaadin(page);
-
-  // Check if session is still valid (page should have Vaadin menu)
-  const rapportierungToggle = page.locator(
-    'vaadin-button[movie-id="menu-item_rapportierung"]'
-  );
-  const menuVisible = await rapportierungToggle
-    .waitFor({ state: "visible", timeout: 15_000 })
-    .then(() => true)
-    .catch(() => false);
-
-  if (!menuVisible) {
-    const url = page.url();
-    throw new Error(t().sessionExpired(url));
-  }
-
-  // Auto-detect locale after page loads and before navigating further
-  await initLocale(page);
-
-  spin(t().openingTimeTracking);
-  const isExpanded = await rapportierungToggle.getAttribute("aria-expanded");
-  if (isExpanded !== "true") {
-    await rapportierungToggle.click();
-    await waitForVaadin(page);
-  }
-
-  spin(t().openingServices);
-  await page.locator('a[href^="proj_services"]').click();
-  await waitForVaadin(page);
-}
-
-/**
- * Set the Leistungen page filters to show a full month.
- * @param monthYear — format "MM.YYYY" e.g. "01.2025"
- */
-async function setMonthFilter(page: Page, monthYear: string): Promise<void> {
-  // Set view to "Month" (position 3 in dropdown)
-  spin(t().settingViewMonth);
-  await selectComboboxByIndex(page, "cmbDateRange", 3);
-
-  // Set Datum to the first day of the requested month
-  const [mm, yyyy] = monthYear.split(".");
-  const formattedDate = `01.${mm}.${yyyy}`;
-
-  spin(t().settingDate(formattedDate));
-  const datePicker = page.locator("vaadin-date-picker#dateField");
-  const input = datePicker.locator("input");
-
-  await input.click({ clickCount: 3 });
-  await page.keyboard.press("Backspace");
-  await input.pressSequentially(formattedDate, { delay: 30 });
-  await input.press("Enter");
-  await page.waitForTimeout(500);
-  await waitForVaadin(page);
-}
-
-/** Read all visible entries from the Leistungen grid. */
-async function readGridEntries(page: Page): Promise<ExistingEntry[]> {
-  // Check for empty state first
-  const emptyState = page.locator(".va-empty-state");
-  if (await emptyState.isVisible().catch(() => false)) {
-    return [];
-  }
-
-  const raw = await page.evaluate(() => {
-    const grid = document.querySelector(
-      'vaadin-grid[movie-id="ServicesList"]'
-    );
-    if (!grid || !grid.shadowRoot) return [];
-
-    const tbody = grid.shadowRoot.querySelector("#items");
-    if (!tbody) return [];
-
-    const rows = Array.from(tbody.querySelectorAll("tr"));
-    const results: { card: string[]; text: string; hours: string; status: string }[] = [];
-
-    for (const row of rows) {
-      const cells = Array.from(row.querySelectorAll("td"));
-
-      const getSlotContent = (cellIndex: number): Element | null => {
-        if (cellIndex >= cells.length) return null;
-        const slot = cells[cellIndex].querySelector("slot");
-        if (!slot) return null;
-        const assigned = (slot as HTMLSlotElement).assignedElements();
-        return assigned.length > 0 ? assigned[0] : null;
-      };
-
-      // Cell 0: card with date + project + service type as separate child elements
-      const cardEl = getSlotContent(0);
-      const card: string[] = [];
-      if (cardEl) {
-        // Read each .dl-slot-row or direct child block separately
-        const blocks = cardEl.querySelectorAll(".dl-slot-row");
-        if (blocks.length > 0) {
-          blocks.forEach((b) => card.push(b.textContent?.trim() || ""));
-        } else {
-          // Fallback: read direct children
-          Array.from(cardEl.children).forEach((c) =>
-            card.push(c.textContent?.trim() || "")
-          );
-        }
-      }
-
-      // Cell 1: description/text
-      const textEl = getSlotContent(1);
-      const text = textEl?.textContent?.trim() || "";
-
-      // Cell 2: hours
-      const hoursEl = getSlotContent(2);
-      const hours = hoursEl?.textContent?.trim() || "";
-
-      // Cell 3: status
-      const statusEl = getSlotContent(3);
-      const status = statusEl?.textContent?.trim() || "";
-
-      // Skip empty rows
-      if (card.length === 0 && !text && !hours) continue;
-
-      results.push({ card, text, hours, status });
-    }
-
-    return results;
-  });
-
-  return raw.map((r, i) => ({
-    // Card parts: [0]=date, [1]=project, [2]=serviceType
-    date: r.card[0] || "",
-    project: r.card[1] || "",
-    serviceType: r.card[2] || "",
-    text: r.text,
-    hours: r.hours,
-    status: r.status,
-    rowIndex: i,
-  }));
-}
-
-/** Click a grid row to open the Buchungsdetails side panel. */
-async function clickRow(page: Page, rowIndex: number): Promise<void> {
-  // Get the bounding box of the target row and click it via Playwright's
-  // mouse API so the event propagates correctly through Vaadin's grid.
-  const box = await page.evaluate((idx) => {
-    const grid = document.querySelector(
-      'vaadin-grid[movie-id="ServicesList"]'
-    );
-    if (!grid || !grid.shadowRoot) return null;
-    const tbody = grid.shadowRoot.querySelector("#items");
-    if (!tbody) return null;
-    const rows = tbody.querySelectorAll("tr");
-    if (!rows[idx]) return null;
-    const rect = rows[idx].getBoundingClientRect();
-    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-  }, rowIndex);
-
-  if (!box) throw new Error(`Grid row ${rowIndex} not found`);
-
-  await page.mouse.click(box.x, box.y);
-  await waitForVaadin(page);
-
-  // Wait for the edit form to appear (works for side panel or dialog)
-  await page
-    .locator('vaadin-date-picker[movie-id="ProjDat"]')
-    .waitFor({ state: "visible", timeout: 10_000 });
-}
-
-/** Fill form fields. Works for both the side panel and the new-entry dialog. */
-async function fillForm(page: Page, entry: TimeEntry): Promise<void> {
-  // Datum (movie-id="ProjDat")
-  const formattedDate = formatDate(entry.date);
-  spin(t().settingDateField(formattedDate));
-  const dateInput = page.locator('vaadin-date-picker[movie-id="ProjDat"] input');
-  await dateInput.click({ clickCount: 3 });
-  await page.keyboard.press("Backspace");
-  await dateInput.pressSequentially(formattedDate, { delay: 30 });
-  await dateInput.press("Enter");
-  await waitForVaadin(page);
-
-  // Projekt-Nr. (movie-id="ProjNr2")
-  spin(t().settingProject(entry.project));
-  await fillCombobox(page, "ProjNr2", entry.project);
-
-  // Service type (movie-id="LeArtNr") — appears after project selection
-  spin(t().settingServiceType(entry.serviceType));
-  const serviceTypeCombo = page.locator(
-    'vaadin-combo-box[movie-id="LeArtNr"]'
-  );
-  await serviceTypeCombo.waitFor({ state: "visible", timeout: 10_000 });
-  await fillCombobox(page, "LeArtNr", entry.serviceType);
-
-  // Hours (movie-id="Menge")
-  spin(t().settingHours(entry.hours));
-  const hoursField = page.locator(
-    'vaadin-text-field[movie-id="Menge"] input'
-  );
-  await hoursField.waitFor({ state: "visible", timeout: 10_000 });
-  await hoursField.click({ clickCount: 3 });
-  await page.keyboard.press("Backspace");
-  await hoursField.fill(String(entry.hours));
-  await waitForVaadin(page);
-
-  // Description (movie-id="Text")
-  if (entry.description) {
-    spin(t().settingDescription(entry.description));
-    const descriptionField = page.locator(
-      'vaadin-text-field[movie-id="Text"] input'
-    );
-    await descriptionField.click({ clickCount: 3 });
-    await page.keyboard.press("Backspace");
-    await descriptionField.fill(entry.description);
-    await waitForVaadin(page);
-  }
-}
-
-/** Delete the currently open entry via the side panel three-dot menu. */
-async function deleteSidePanelEntry(page: Page): Promise<void> {
-  // Click three-dot menu in side panel header
-  const dotsBtn = page.locator(
-    'vaadin-button[movie-id="sidepanel_btnPopupActions"]'
-  );
-  await dotsBtn.click();
-  await page.waitForTimeout(300);
-
-  // Click delete in the popup menu
-  await page.locator('vaadin-context-menu-item[movie-id="deleteActionBtn"]').click();
-  await waitForVaadin(page);
-
-  // Confirm deletion in the dialog
-  const confirmBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
-  await confirmBtn.waitFor({ state: "visible", timeout: 10_000 });
-  await confirmBtn.click();
-  await waitForVaadin(page);
-}
-
-/** Delete a grid row directly via the inline three-dot context menu. */
-async function deleteRowViaContextMenu(page: Page, rowIndex: number): Promise<void> {
-  // Click the three-dot menu button on the target row
-  const btnBox = await page.evaluate((idx) => {
-    const grid = document.querySelector('vaadin-grid[movie-id="ServicesList"]');
-    if (!grid || !grid.shadowRoot) return null;
-    const tbody = grid.shadowRoot.querySelector("#items");
-    if (!tbody) return null;
-    const rows = tbody.querySelectorAll("tr");
-    if (!rows[idx]) return null;
-    // The menu button is in the last cell's slotted content
-    const cells = rows[idx].querySelectorAll("td");
-    for (const cell of Array.from(cells)) {
-      const slot = cell.querySelector("slot") as HTMLSlotElement | null;
-      if (!slot) continue;
-      const assigned = slot.assignedElements();
-      for (const el of assigned) {
-        const btn = el.querySelector("vaadin-button.dl-menubutton") || (el.matches("vaadin-button.dl-menubutton") ? el : null);
-        if (btn) {
-          const rect = btn.getBoundingClientRect();
-          return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-        }
-      }
-    }
-    return null;
-  }, rowIndex);
-
-  if (!btnBox) throw new Error(`Menu button not found on row ${rowIndex}`);
-
-  await page.mouse.click(btnBox.x, btnBox.y);
-
-  // Wait for the context menu overlay to appear
-  const deleteItem = page.locator('vaadin-context-menu-item[movie-id="datalist_context_delete"]');
-  await deleteItem.waitFor({ state: "visible", timeout: 10_000 });
-  await deleteItem.click();
-  await waitForVaadin(page);
-
-  // Confirm deletion in the dialog
-  const confirmBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
-  await confirmBtn.waitFor({ state: "visible", timeout: 10_000 });
-  await confirmBtn.click();
-  await waitForVaadin(page);
-
-  // Wait for confirm dialog to close and grid to stabilize
-  await confirmBtn.waitFor({ state: "hidden", timeout: 10_000 });
-  await page.waitForTimeout(500);
-}
-
-/** Close the side panel if it's currently open. */
-async function closeSidePanelIfOpen(page: Page): Promise<void> {
-  const panel = page.locator('va-side-panel[movie-id="id_editRecordSidePanel"]');
-  if (await panel.isVisible().catch(() => false)) {
-    await page.locator('vaadin-button[movie-id="sidepanel_btnClose"]').click();
-    await waitForVaadin(page);
-  }
-}
-
-/** Prompt the user for input in the terminal. */
-function promptUser(question: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim().toLowerCase());
-    });
-  });
-}
-
+import {
+  withCaptchaRetry,
+  navigateToLeistungen,
+  setMonthFilter,
+  setWeekFilter,
+  readGridEntries,
+  navigateToWochenrapport,
+  readWeeklyReport,
+  readSaldoPanel,
+  readVacationPanel,
+  clickRow,
+  fillForm,
+  deleteSidePanelEntry,
+  deleteRowViaContextMenu,
+  closeSidePanelIfOpen,
+  createEntry,
+  saveEntry,
+  formatDate,
+  toMonthYear,
+} from "./page";
+import { waitForVaadin } from "./vaadin";
+import { reverseProject, reverseServiceType } from "./aliases";
+
+export type { TimeEntry, ExistingEntry } from "./page";
+export { formatDate, toMonthYear } from "./page";
+
+// Re-import types for local use
+import type { TimeEntry, ExistingEntry } from "./page";
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-
-/** Format date from YYYY-MM-DD to DD.MM.YYYY */
-export function formatDate(date: string): string {
-  const [y, m, d] = date.split("-");
-  return `${d}.${m}.${y}`;
-}
-
-/** Extract MM.YYYY from a YYYY-MM-DD date string. */
-export function toMonthYear(date: string): string {
-  const [y, m] = date.split("-");
-  return `${m}.${y}`;
-}
-
-/**
- * Set the Leistungen page filters to show a week containing the given date.
- * @param date — format "YYYY-MM-DD"
- */
-async function setWeekFilter(page: Page, date: string): Promise<void> {
-  spin(t().settingViewWeek);
-  await selectComboboxByIndex(page, "cmbDateRange", 2);
-
-  const formattedDate = formatDate(date);
-  spin(t().settingDate(formattedDate));
-  const datePicker = page.locator("vaadin-date-picker#dateField");
-  const input = datePicker.locator("input");
-
-  await input.click({ clickCount: 3 });
-  await page.keyboard.press("Backspace");
-  await input.pressSequentially(formattedDate, { delay: 30 });
-  await input.press("Enter");
-  await page.waitForTimeout(500);
-  await waitForVaadin(page);
-}
 
 /**
  * Fetch existing entries from Abacus for the given dates.
@@ -544,6 +80,152 @@ export async function fetchExistingEntries(dates: string[]): Promise<ExistingEnt
   });
 }
 
+// ---------------------------------------------------------------------------
+// Status helpers
+// ---------------------------------------------------------------------------
+
+/** Get ISO week number for a date. */
+function getISOWeekNumber(d: Date): number {
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  return Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+/** Right-pad a label to a fixed width. */
+function pad(label: string, width: number): string {
+  return label.padEnd(width);
+}
+
+/** Format hours as "8.00". */
+function fmtHours(n: number): string {
+  return n.toFixed(2);
+}
+
+/** Format signed hours: positive with "+", negative with "−". */
+function fmtSignedHours(n: number): string {
+  if (n > 0) return `+${n.toFixed(2)}`;
+  if (n < 0) return `${n.toFixed(2)}`;
+  return "0.00";
+}
+
+/** Format hours with days in parentheses, e.g. "40.00 hours (5.0d)". */
+function fmtHoursAndDays(n: number): string {
+  const days = n / 8;
+  return `${fmtHours(n)} ${t().statusHoursUnit} (${days.toFixed(1)}${t().statusDaysUnit})`;
+}
+
+/** Print quick-action hints when there are missing days. */
+function printHints(entries: ExistingEntry[], missingDayDates: string[], hours: number, fallbackDate: string): void {
+  const lastEntry = entries[entries.length - 1];
+  if (!lastEntry || missingDayDates.length === 0) return;
+  const projectArg = reverseProject(lastEntry.project) || lastEntry.project;
+  const serviceTypeArg = reverseServiceType(lastEntry.serviceType) || lastEntry.serviceType;
+  const text = lastEntry.text || "...";
+  const toIso = (d: string) => d.split(".").reverse().join("-");
+  const targetDate = missingDayDates.length > 0 ? toIso(missingDayDates[0]) : fallbackDate;
+  console.log("");
+  console.log(dim(`  💡 ${t().hintQuickActions}`));
+  console.log("");
+  console.log(dim(`  ${t().hintLogSingle}`));
+  console.log(info(`    abacus time log --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}" --date ${targetDate}`));
+  if (missingDayDates.length > 1) {
+    console.log("");
+    console.log(dim(`  ${t().hintBatchFill}`));
+    console.log(info(`    abacus time batch --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}"`));
+    console.log("");
+    console.log(dim(`  ${t().hintBatchGenerate}`));
+    console.log(info(`    abacus time batch --generate`));
+    console.log(info(`    code batch.json`));
+    console.log(info(`    abacus time batch --file batch.json`));
+  }
+  console.log("");
+}
+
+/** Get short weekday name using Intl (locale-aware, e.g. Mon/Di/Lun). */
+function shortDayName(d: Date, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(d);
+}
+
+/**
+ * Refresh the week cache after a log/delete operation.
+ * Switches to week view, reads current entries, and updates the cache file.
+ */
+async function refreshWeekCache(page: Page): Promise<void> {
+  try {
+    spin(t().updatingCache);
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+
+    await setWeekFilter(page, todayStr);
+    const entries = await readGridEntries(page);
+
+    const locale = getLocale();
+    const dayOfWeek = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) - 1));
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    const weekNum = getISOWeekNumber(today);
+
+    // Compute missing days (same logic as statusTime)
+    const missingDayNames: string[] = [];
+    const missingDayDates: string[] = [];
+    for (let d = new Date(monday); d <= today && d <= friday; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue;
+      const dStr = formatDate(d.toISOString().split("T")[0]);
+      const hasEntry = entries.some((e) => e.date === dStr);
+      if (!hasEntry) {
+        missingDayNames.push(shortDayName(new Date(d), locale));
+        missingDayDates.push(dStr);
+      }
+    }
+
+    // Sum hours from entries
+    const worked = entries.reduce((sum, e) => {
+      const h = parseFloat(e.hours.replace(",", "."));
+      return sum + (isNaN(h) ? 0 : h);
+    }, 0);
+
+    // Preserve saldo/vacation/target from existing cache
+    let existingCache: Record<string, unknown> | null = null;
+    try {
+      existingCache = JSON.parse(fs.readFileSync(config.statusCachePath, "utf-8"));
+    } catch {
+      // Cache may not exist yet; fall back to defaults
+    }
+
+    const target = (existingCache?.target as number) || 40;
+    const remaining = Math.max(0, target - worked);
+
+    const fmtFull = (d: Date) =>
+      `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+
+    ensureConfigDir();
+    const cache = {
+      updatedAt: new Date().toISOString(),
+      weekNumber: weekNum,
+      monday: fmtFull(monday),
+      friday: fmtFull(friday),
+      worked,
+      target,
+      remaining,
+      missingDays: missingDayNames.map((name, i) => ({
+        date: missingDayDates[i],
+        dayName: name,
+      })),
+      saldo: existingCache?.saldo ?? null,
+      vacation: existingCache?.vacation ?? null,
+    };
+    fs.writeFileSync(config.statusCachePath, JSON.stringify(cache, null, 2) + "\n");
+    stopSpinner();
+  } catch {
+    // Cache refresh is non-critical, silently ignore
+    stopSpinner();
+  }
+}
+
 /**
  * Show the time report (weekly status) for the week containing the given date.
  * @param date — format "YYYY-MM-DD", defaults to today
@@ -554,119 +236,124 @@ export async function statusTime(date: string): Promise<void> {
 
   try {
     const page = await context.newPage();
+
+    // 1. Navigate to Leistungen first (sets up session + filters)
     await navigateToLeistungen(page);
     await setWeekFilter(page, date);
 
     spin(t().readingTimeReport);
 
-    const rows = await page.evaluate(() => {
-      const panel = document.querySelector(
-        'vaadin-vertical-layout[movie-id="id_pnl_matrixView"]'
-      );
-      if (!panel) return [];
+    // 2. Read grid entries for missing-days detection
+    const entries = await readGridEntries(page);
 
-      const flexRows = panel.querySelectorAll("div.va-flex-layout");
-      const results: { label: string; col1: string; col2: string }[] = [];
+    // 3. Navigate to Wochenrapport for weekly totals, saldo, vacation
+    await navigateToWochenrapport(page);
 
-      for (const row of Array.from(flexRows)) {
-        const cells = row.querySelectorAll(
-          "div.va-html-label, div.va-label"
-        );
-        if (cells.length < 3) continue;
+    const weekly = await readWeeklyReport(page);
+    const saldo = await readSaldoPanel(page);
+    const vacation = await readVacationPanel(page);
 
-        const getText = (el: Element): string =>
-          el.textContent?.trim() || "";
-
-        const label = getText(cells[0]);
-        if (!label) continue;
-
-        results.push({
-          label,
-          col1: getText(cells[1]),
-          col2: getText(cells[2]),
-        });
-      }
-
-      return results;
-    });
-
-    if (rows.length === 0) {
+    if (!weekly) {
       fail(err(t().timeReportNotFound));
       return;
     }
 
     stopSpinner();
 
-    const table = new Table({
-      head: [t().timeReportTitle, t().colDay, t().colTotal],
-      style: { head: ["cyan"] },
-    });
+    const locale = getLocale();
+    const LABEL_WIDTH = 22;
 
-    for (const r of rows) {
-      table.push([r.label, r.col1, r.col2]);
-    }
+    // --- Week header ---
+    const targetDate = new Date(date);
+    const dayOfWeek = targetDate.getDay();
+    const monday = new Date(targetDate);
+    monday.setDate(targetDate.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) - 1));
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+
+    const weekNum = getISOWeekNumber(targetDate);
+    const fmtDayMonth = (d: Date) => `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.`;
+    const fmtFull = (d: Date) => `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 
     console.log("");
-    console.log(table.toString());
+    console.log(bold(t().statusWeekHeader(weekNum, fmtDayMonth(monday), fmtFull(friday))));
+    console.log("");
 
-    // --- Hints ---
-    const entries = await readGridEntries(page);
+    // --- Worked / Remaining ---
+    const remaining = Math.max(0, weekly.target - weekly.worked);
+    console.log(`  ${pad(t().statusWorked + ":", LABEL_WIDTH)} ${bold(fmtHours(weekly.worked))} / ${fmtHours(weekly.target)} ${t().statusHoursUnit}`);
+    console.log(`  ${pad(t().statusRemaining + ":", LABEL_WIDTH)} ${remaining > 0 ? warn(fmtHours(remaining)) : fmtHours(remaining)} ${t().statusHoursUnit}`);
+
+    // --- Missing days ---
     const today = new Date();
-    const todayStr = formatDate(
-      today.toISOString().split("T")[0]
-    );
-
-    // Find weekdays (Mon-Fri) in this week up to today that have no entries
-    const targetDate = new Date(date);
-    const dayOfWeek = targetDate.getDay(); // 0=Sun, 1=Mon, ...
-    const monday = new Date(targetDate);
-    monday.setDate(
-      targetDate.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) - 1)
-    );
-
-    const missingDaysList: string[] = [];
-    for (let d = new Date(monday); d <= today; d.setDate(d.getDate() + 1)) {
+    const missingDayNames: string[] = [];
+    const missingDayDates: string[] = [];
+    for (let d = new Date(monday); d <= today && d <= friday; d.setDate(d.getDate() + 1)) {
       const dow = d.getDay();
-      if (dow === 0 || dow === 6) continue; // skip weekends
+      if (dow === 0 || dow === 6) continue;
       const dStr = formatDate(d.toISOString().split("T")[0]);
       const hasEntry = entries.some((e) => e.date === dStr);
       if (!hasEntry) {
-        missingDaysList.push(dStr);
+        missingDayNames.push(shortDayName(new Date(d), locale));
+        missingDayDates.push(dStr);
       }
     }
 
-    if (missingDaysList.length > 0) {
-      console.log(
-        warn(t().missingDays(missingDaysList.length, missingDaysList.join(", ")))
-      );
+    if (missingDayNames.length > 0) {
+      console.log(`  ${pad(t().statusMissingDaysLabel + ":", LABEL_WIDTH)} ${warn(missingDayNames.join(", "))}`);
     }
 
-    // Check Differenz for negative hours
-    const diffRow = rows.find((r) => r.label === "Differenz");
-    if (diffRow) {
-      const diff = parseFloat(diffRow.col2.replace(",", "."));
-      if (diff < 0) {
-        const missing = Math.abs(diff);
-        console.log(warn(t().missingHours(missing.toFixed(2))));
-
-        // Suggest command based on last entry
-        const lastEntry = entries[entries.length - 1];
-        if (lastEntry) {
-          // Extract project number (before the dot)
-          const projectNr = lastEntry.project.split(".")[0].trim();
-          // Extract service type number
-          const serviceTypeNr = lastEntry.serviceType.split(".")[0].trim();
-          const hours = Math.min(missing, 8);
-          console.log("");
-          console.log(bold(t().exampleLabel));
-          console.log(
-            dim(`  npx abacus time log --project ${projectNr} --hours ${hours.toFixed(2)} --service-type ${serviceTypeNr} --text "${lastEntry.text || "..."}" --date ${missingDaysList.length > 0 ? missingDaysList[0].split(".").reverse().join("-") : date}`)
-          );
-        }
-      }
+    // --- Balances (Saldo) ---
+    if (saldo) {
+      console.log("");
+      console.log(bold(t().statusBalancesHeader));
+      console.log(`  ${pad(t().statusOvertime + ":", LABEL_WIDTH)} ${fmtSignedHours(saldo.overtime)} ${t().statusHoursUnit} (${(saldo.overtime / 8).toFixed(1)}${t().statusDaysUnit})`);
+      console.log(`  ${pad(t().statusExtraTime + ":", LABEL_WIDTH)} ${fmtSignedHours(saldo.extraTime)} ${t().statusHoursUnit} (${(saldo.extraTime / 8).toFixed(1)}${t().statusDaysUnit})`);
     }
 
-    console.log("");
+    // --- Vacation (Ferien) ---
+    if (vacation) {
+      console.log("");
+      console.log(bold(t().statusVacationHeader));
+      console.log(`  ${pad(t().statusVacationRemaining + ":", LABEL_WIDTH)} ${fmtHours(vacation.remaining)} / ${fmtHours(vacation.entitlement)} ${t().statusHoursUnit} (${(vacation.remaining / 8).toFixed(1)} / ${(vacation.entitlement / 8).toFixed(1)}${t().statusDaysUnit})`);
+      console.log(`  ${pad(t().statusVacationPlannedByDec + ":", LABEL_WIDTH)} ${fmtHoursAndDays(vacation.plannedByYearEnd)}`);
+    }
+
+    // --- Write status cache ---
+    try {
+      ensureConfigDir();
+      const cache = {
+        updatedAt: new Date().toISOString(),
+        weekNumber: weekNum,
+        monday: fmtFull(monday),
+        friday: fmtFull(friday),
+        worked: weekly.worked,
+        target: weekly.target,
+        remaining,
+        missingDays: missingDayNames.map((name, i) => ({
+          date: missingDayDates[i],
+          dayName: name,
+        })),
+        saldo: saldo ? { overtime: saldo.overtime, extraTime: saldo.extraTime, total: saldo.total } : null,
+        vacation: vacation ? {
+          remaining: vacation.remaining,
+          entitlement: vacation.entitlement,
+          remainingDays: parseFloat((vacation.remaining / 8).toFixed(1)),
+          entitlementDays: parseFloat((vacation.entitlement / 8).toFixed(1)),
+        } : null,
+      };
+      fs.writeFileSync(config.statusCachePath, JSON.stringify(cache, null, 2) + "\n");
+    } catch {
+      // Cache write failure is non-critical, silently ignore
+    }
+
+    // --- Example command hints ---
+    if (weekly.difference < 0) {
+      const hours = Math.min(Math.abs(weekly.difference), 8);
+      printHints(entries, missingDayDates, hours, date);
+    } else {
+      console.log("");
+    }
   } finally {
     await close();
   }
@@ -765,10 +452,12 @@ export async function listTime(monthYear: string): Promise<void> {
 
     console.log("");
     console.log(table.toString());
-    console.log("");
     console.log(info(t().entriesTotal(entries.length)));
     if (missingCount > 0) {
       console.log(warn(t().missingDaysSummary(missingCount)));
+
+      const missingDays = weekdays.filter((d) => !entriesByDate.has(d) || entriesByDate.get(d)!.length === 0);
+      printHints(entries, missingDays, 8, "");
     }
   } finally {
     await close();
@@ -813,26 +502,12 @@ export async function logTime(entry: TimeEntry): Promise<void> {
         await fillForm(page, entry);
       } else {
         spin(t().creatingNewEntry);
-        await page.locator('vaadin-button[movie-id="mainAction"]').click();
-        await waitForVaadin(page);
-        await page
-          .locator('vaadin-combo-box[movie-id="ProjNr2"]')
-          .waitFor({ state: "visible", timeout: 10_000 });
-        await fillForm(page, entry);
+        await createEntry(page, entry);
       }
     } else {
       spin(t().noExistingEntryCreating);
-      await page.locator('vaadin-button[movie-id="mainAction"]').click();
-      await waitForVaadin(page);
-      await page
-        .locator('vaadin-combo-box[movie-id="ProjNr2"]')
-        .waitFor({ state: "visible", timeout: 10_000 });
-      await fillForm(page, entry);
+      await createEntry(page, entry);
     }
-
-    // Blur the active field so Vaadin commits pending values to the server
-    await page.keyboard.press("Tab");
-    await waitForVaadin(page);
 
     if (config.semiManual) {
       // Semi-manual mode: form is filled, user saves manually
@@ -843,23 +518,12 @@ export async function logTime(entry: TimeEntry): Promise<void> {
       });
       succeed(success(t().saved));
     } else {
-      // Save — try side panel save button, then fall back to dialog button
       spin(t().saving);
-      const saveBtn = page.locator('vaadin-button[movie-id="btnSave"]');
-      const dialogSaveBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
-
-      if (await saveBtn.isVisible().catch(() => false)) {
-        await saveBtn.click();
-      } else if (await dialogSaveBtn.isVisible().catch(() => false)) {
-        await dialogSaveBtn.click();
-      } else {
-        fail(err(t().saveButtonNotFound));
-        return;
-      }
-      await waitForVaadin(page);
-      await page.waitForTimeout(1000);
+      await saveEntry(page);
       succeed(success(t().saved));
     }
+
+    await refreshWeekCache(page);
   } finally {
     await close();
   }
@@ -935,6 +599,7 @@ export async function deleteTime(
           await deleteSidePanelEntry(page);
         }
         succeed(success(t().entriesDeleted(matches.length)));
+        await refreshWeekCache(page);
         return;
       }
       const idx = parseInt(answer, 10) - 1;
@@ -953,6 +618,8 @@ export async function deleteTime(
     await deleteSidePanelEntry(page);
 
     succeed(success(t().entryDeleted));
+
+    await refreshWeekCache(page);
   } finally {
     await close();
   }
@@ -995,6 +662,8 @@ export async function loadMonthEntries(): Promise<{
         await deleteRowViaContextMenu(page, sorted[i]);
       }
       succeed(success(t().entriesDeleted(sorted.length)));
+
+      await refreshWeekCache(page);
     };
 
     return { entries, deleteFn, closeFn: close };
@@ -1053,32 +722,10 @@ export async function batchLogTime(entries: TimeEntry[]): Promise<void> {
 
         spin(t().batchCreating(entryIndex, entries.length, targetDate));
 
-        await page.locator('vaadin-button[movie-id="mainAction"]').click();
-        await waitForVaadin(page);
-        await page
-          .locator('vaadin-combo-box[movie-id="ProjNr2"]')
-          .waitFor({ state: "visible", timeout: 10_000 });
+        await createEntry(page, entry);
 
-        await fillForm(page, entry);
-
-        // Blur to commit pending values
-        await page.keyboard.press("Tab");
-        await waitForVaadin(page);
-
-        // Save
-        const saveBtn = page.locator('vaadin-button[movie-id="btnSave"]');
-        const dialogSaveBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
-
-        if (await saveBtn.isVisible().catch(() => false)) {
-          await saveBtn.click();
-        } else if (await dialogSaveBtn.isVisible().catch(() => false)) {
-          await dialogSaveBtn.click();
-        } else {
-          fail(err(t().saveButtonNotFound));
-          return;
-        }
-        await waitForVaadin(page);
-        await page.waitForTimeout(1000);
+        spin(t().saving);
+        await saveEntry(page);
 
         await closeSidePanelIfOpen(page);
         created++;
@@ -1087,6 +734,10 @@ export async function batchLogTime(entries: TimeEntry[]): Promise<void> {
 
     stopSpinner();
     succeed(success(t().batchSummary(created, skipped)));
+
+    if (created > 0) {
+      await refreshWeekCache(page);
+    }
   } finally {
     await close();
   }
