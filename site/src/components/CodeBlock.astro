@@ -1,0 +1,36 @@
+---
+interface Props {
+  title?: string;
+}
+
+const { title } = Astro.props;
+---
+
+<div class="code-block">
+  {title && <div class="code-title">{title}</div>}
+  <slot />
+</div>
+
+<style>
+  .code-block {
+    margin-bottom: var(--space-lg);
+  }
+
+  .code-title {
+    background: #334155;
+    color: var(--color-code-text);
+    padding: var(--space-sm) var(--space-lg);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+  }
+
+  .code-block :global(pre) {
+    margin-bottom: 0;
+  }
+
+  .code-title + :global(pre) {
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+  }
+</style>

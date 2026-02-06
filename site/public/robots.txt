@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://wassertim.github.io/abacus-cli/sitemap-index.xml

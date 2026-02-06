@@ -1,0 +1,75 @@
+---
+import Docs from '../../../layouts/Docs.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import { getTranslations } from '../../../i18n';
+
+const locale = 'en' as const;
+const t = getTranslations(locale);
+---
+
+<Docs
+  title="Configuration — abacus-cli"
+  description={t.meta.configDescription}
+  locale={locale}
+  pagePath="/docs/configuration"
+>
+  <h1>{t.config.title}</h1>
+  <p>{t.config.description}</p>
+
+  <h2 id="env-variables">Environment Variables</h2>
+
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>ABACUS_URL</code></td><td><code>https://abacus.example.com/portal/myabacus</code></td><td>Base URL of your Abacus portal</td></tr>
+      <tr><td><code>ABACUS_CONFIG_DIR</code></td><td><code>~/.abacus-cli</code></td><td>Directory for session state and discovery data</td></tr>
+      <tr><td><code>ABACUS_LOCALE</code></td><td>auto-detected</td><td>Override the UI locale (de, en, fr, it, es)</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="config-command">abacus config</h2>
+  <p>View and modify configuration stored in <code>~/.abacus-cli/config.json</code>.</p>
+  <CodeBlock>
+    <pre><code>abacus config show                          # Show current config and sources
+abacus config set url https://your-instance.example.com/portal/myabacus
+abacus config set locale de                 # Override locale (de, en, fr, it, es)</code></pre>
+  </CodeBlock>
+
+  <h2 id="aliases">Aliases</h2>
+  <p>Create short names for frequently used project numbers and service types.</p>
+  <CodeBlock>
+    <pre><code>abacus alias list
+abacus alias add project myproj 71100000001
+abacus alias add service-type dev 1435
+abacus alias remove project myproj</code></pre>
+  </CodeBlock>
+  <p>Once defined, use aliases anywhere instead of numeric IDs:</p>
+  <CodeBlock>
+    <pre><code>abacus time log --project myproj --hours 8 --text "Development"</code></pre>
+  </CodeBlock>
+
+  <h2 id="locale">Locale</h2>
+  <p>The CLI supports German, English, French, Italian, and Spanish. Locale is resolved in this priority order:</p>
+  <ol>
+    <li><code>ABACUS_LOCALE</code> environment variable</li>
+    <li><code>locale</code> field in <code>config.json</code></li>
+    <li>System locale auto-detection</li>
+    <li>Fallback to <code>en</code></li>
+  </ol>
+  <CodeBlock>
+    <pre><code># Set via environment variable
+export ABACUS_LOCALE=de
+
+# Or via config
+abacus config set locale de</code></pre>
+  </CodeBlock>
+
+  <h2 id="session-refresh">Session Refresh</h2>
+  <p>Keep your saved session alive by refreshing it periodically. On macOS, you can install a launchd agent to do this automatically.</p>
+  <CodeBlock>
+    <pre><code>abacus refresh                    # Refresh session once
+abacus refresh --install          # Install auto-refresh daemon (default: every 15 min)
+abacus refresh --install --interval 30   # Custom interval in minutes
+abacus refresh --uninstall        # Remove daemon</code></pre>
+  </CodeBlock>
+</Docs>

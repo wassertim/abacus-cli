@@ -1,0 +1,103 @@
+---
+import { type Locale, getTranslations, localePath, otherLocale } from '../i18n';
+
+interface Props {
+  locale: Locale;
+  pagePath: string;
+}
+
+const { locale, pagePath } = Astro.props;
+const t = getTranslations(locale);
+const other = otherLocale(locale);
+---
+
+<header class="header">
+  <div class="header-inner container">
+    <a href={localePath(locale, '/')} class="logo">
+      <span class="logo-icon">⌘</span>
+      abacus-cli
+    </a>
+    <nav class="header-nav">
+      <a href={localePath(locale, '/getting-started')}>{t.nav.gettingStarted}</a>
+      <a href={localePath(locale, '/docs/')}>{t.nav.commands}</a>
+      <a href={localePath(locale, '/docs/configuration')}>{t.nav.configuration}</a>
+      <a href="https://github.com/wassertim/abacus-cli" class="nav-github">{t.nav.github}</a>
+      <a href={localePath(other, pagePath)} class="lang-switch">{other.toUpperCase()}</a>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .header {
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 3.5rem;
+  }
+
+  .logo {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .logo:hover {
+    text-decoration: none;
+  }
+
+  .logo-icon {
+    font-size: 1.3rem;
+  }
+
+  .header-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-lg);
+  }
+
+  .header-nav a {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .header-nav a:hover {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  .lang-switch {
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.05em;
+  }
+
+  .lang-switch:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary) !important;
+  }
+
+  @media (max-width: 768px) {
+    .header-nav {
+      gap: var(--space-md);
+    }
+
+    .header-nav a:not(.lang-switch):not(.nav-github) {
+      display: none;
+    }
+  }
+</style>

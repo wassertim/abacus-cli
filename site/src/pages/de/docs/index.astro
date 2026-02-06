@@ -1,0 +1,140 @@
+---
+import Docs from '../../../layouts/Docs.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import { getTranslations } from '../../../i18n';
+
+const locale = 'de' as const;
+const t = getTranslations(locale);
+---
+
+<Docs
+  title="Befehlsreferenz — abacus-cli"
+  description={t.meta.docsDescription}
+  locale={locale}
+  pagePath="/docs/"
+>
+  <h1>{t.docs.title}</h1>
+  <p>{t.docs.description}</p>
+
+  <h2 id="login">abacus login</h2>
+  <p>Öffnet ein echtes Browserfenster für manuelles Login. Session-Cookies werden lokal gespeichert, sodass nachfolgende Befehle headless laufen.</p>
+  <CodeBlock>
+    <pre><code>abacus login</code></pre>
+  </CodeBlock>
+
+  <h2 id="time-log">abacus time log</h2>
+  <p>Einen einzelnen Zeiteintrag erfassen.</p>
+  <CodeBlock>
+    <pre><code>abacus time log --project 71100000001 --hours 8 --service-type 1435 --text "Entwicklung" --date 2025-01-15</code></pre>
+  </CodeBlock>
+  <table>
+    <thead><tr><th>Flag</th><th>Pflicht</th><th>Standard</th><th>Beschreibung</th></tr></thead>
+    <tbody>
+      <tr><td><code>--project &lt;id&gt;</code></td><td>nein</td><td>—</td><td>Projektnummer oder Alias (interaktive Auswahl falls weggelassen)</td></tr>
+      <tr><td><code>--hours &lt;n&gt;</code></td><td>ja</td><td>—</td><td>Zu erfassende Stunden</td></tr>
+      <tr><td><code>--service-type &lt;id&gt;</code></td><td>nein</td><td><code>1435</code></td><td>Leistungsart-ID oder Alias</td></tr>
+      <tr><td><code>--text &lt;text&gt;</code></td><td>ja</td><td>—</td><td>Beschreibung</td></tr>
+      <tr><td><code>--date &lt;YYYY-MM-DD&gt;</code></td><td>nein</td><td>heute</td><td>Datum des Eintrags</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="time-list">abacus time list</h2>
+  <p>Zeiteinträge für einen bestimmten Monat auflisten.</p>
+  <CodeBlock>
+    <pre><code>abacus time list                      # aktueller Monat
+abacus time list --monthYear 01.2025  # bestimmter Monat</code></pre>
+  </CodeBlock>
+
+  <h2 id="time-status">abacus time status</h2>
+  <p>Zeigt die Wochenübersicht für die Woche des angegebenen Datums — erfasste Stunden, Reststunden, fehlende Tage, Überstunden und Ferientage.</p>
+  <CodeBlock>
+    <pre><code>abacus time status --date 2025-01-15</code></pre>
+  </CodeBlock>
+
+  <h2 id="time-batch">abacus time batch</h2>
+  <p>Mehrere Zeiteinträge in einer einzigen Browser-Session erstellen.</p>
+
+  <h3>Bereichsfüllung (Standard)</h3>
+  <p>Füllt alle Wochentage in einem Zeitraum:</p>
+  <CodeBlock>
+    <pre><code># Aktuelle Woche füllen (Mo-Fr)
+abacus time batch --project 71100000001 --hours 8 --service-type 1435 --text "Entwicklung"
+
+# Bestimmten Zeitraum füllen
+abacus time batch --from 2026-01-26 --to 2026-01-30 --project 71100000001 --hours 8 --text "Entw."
+
+# Vorschau ohne Erstellung
+abacus time batch --project 71100000001 --hours 8 --text "Entw." --dry-run</code></pre>
+  </CodeBlock>
+
+  <h3>Vorlage generieren</h3>
+  <p>Findet fehlende Tage und schreibt eine vorgefüllte Datei:</p>
+  <CodeBlock>
+    <pre><code>abacus time batch --generate
+abacus time batch --generate --from 2026-01-26 --to 2026-01-30 --out eintraege.json
+# Datei bearbeiten, dann importieren
+abacus time batch --file eintraege.json</code></pre>
+  </CodeBlock>
+
+  <h3>Datei-Import</h3>
+  <p>Einträge aus einer JSON- oder CSV-Datei erstellen:</p>
+  <CodeBlock>
+    <pre><code>abacus time batch --file eintraege.json
+abacus time batch --file eintraege.csv
+abacus time batch --file eintraege.json --include-weekends</code></pre>
+  </CodeBlock>
+
+  <table>
+    <thead><tr><th>Flag</th><th>Beschreibung</th></tr></thead>
+    <tbody>
+      <tr><td><code>--project &lt;id&gt;</code></td><td>Projektnummer oder Alias (Pflicht bei Bereichsfüllung)</td></tr>
+      <tr><td><code>--hours &lt;n&gt;</code></td><td>Stunden pro Eintrag (Pflicht bei Bereichsfüllung)</td></tr>
+      <tr><td><code>--service-type &lt;id&gt;</code></td><td>Leistungsart (Standard: 1435)</td></tr>
+      <tr><td><code>--text &lt;text&gt;</code></td><td>Beschreibung</td></tr>
+      <tr><td><code>--from &lt;YYYY-MM-DD&gt;</code></td><td>Startdatum (Standard: Montag der aktuellen Woche)</td></tr>
+      <tr><td><code>--to &lt;YYYY-MM-DD&gt;</code></td><td>Enddatum (Standard: Freitag der aktuellen Woche)</td></tr>
+      <tr><td><code>--file &lt;path&gt;</code></td><td>Import aus JSON- oder CSV-Datei</td></tr>
+      <tr><td><code>--generate</code></td><td>Vorlagen-Datei mit fehlenden Tagen generieren</td></tr>
+      <tr><td><code>--out &lt;path&gt;</code></td><td>Ausgabepfad für --generate (Standard: batch.json)</td></tr>
+      <tr><td><code>--dry-run</code></td><td>Einträge nur als Vorschau anzeigen</td></tr>
+      <tr><td><code>--include-weekends</code></td><td>Wochenend-Daten aus Datei-Import zulassen</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="time-delete">abacus time delete</h2>
+  <p><strong>Interaktiver Modus</strong> — ohne Flags ausführen, um Einträge des aktuellen Monats auszuwählen:</p>
+  <CodeBlock>
+    <pre><code>abacus time delete</code></pre>
+  </CodeBlock>
+  <p>Öffnet eine Checkbox-Auswahl mit allen Einträgen des Monats. Mit Pfeiltasten navigieren, Leertaste zum Umschalten, <code>a</code> für alle, Enter zum Bestätigen.</p>
+
+  <p><strong>Gezielter Modus</strong> — bestimmten Eintrag nach Datum und Projekt löschen:</p>
+  <CodeBlock>
+    <pre><code>abacus time delete --date 2025-01-15 --project 71100000001</code></pre>
+  </CodeBlock>
+
+  <h2 id="summary">abacus summary</h2>
+  <p>Zeigt eine kompakte einzeilige Wochenstatus-Zusammenfassung. Liest aus einem lokalen Cache — falls dieser fehlt oder veraltet ist, werden aktuelle Daten abgerufen.</p>
+  <CodeBlock>
+    <pre><code>abacus summary</code></pre>
+  </CodeBlock>
+  <pre><code>Week 06 · 32.5 / 40h · 7.5h remaining · Wed, Thu missing
+Overtime: +12.5h (1.6d) · Vacation: 15.0d left
+(updated 2h ago)</code></pre>
+
+  <h2 id="check">abacus check</h2>
+  <p>Stille Prüfung für <code>.zshrc</code>. Gibt nur eine Warnung aus, wenn diese Woche Tage fehlen.</p>
+  <CodeBlock>
+    <pre><code>abacus check</code></pre>
+  </CodeBlock>
+  <p>Zum Shell-Profil hinzufügen:</p>
+  <CodeBlock>
+    <pre><code>abacus check 2>/dev/null</code></pre>
+  </CodeBlock>
+
+  <h2 id="discover">abacus discover</h2>
+  <p>Zeichnet Netzwerkanfragen auf, während Sie manuell mit Abacus interagieren. Nützlich zum Verstehen von Vaadins Kommunikationsprotokoll.</p>
+  <CodeBlock>
+    <pre><code>abacus discover</code></pre>
+  </CodeBlock>
+</Docs>
