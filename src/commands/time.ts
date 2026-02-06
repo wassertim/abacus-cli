@@ -2,8 +2,9 @@ import { Command } from "commander";
 import * as fs from "fs";
 import * as path from "path";
 import Table from "cli-table3";
-import { logTime, listTime, deleteTime, statusTime, batchLogTime, generateBatchFile, loadMonthEntries, TimeEntry } from "../api";
+import { logTime, listTime, deleteTime, statusTime, batchLogTime, generateBatchFile, loadMonthEntries, fetchExistingEntries, formatDate, TimeEntry } from "../api";
 import { t, confirmDeleteKey } from "../i18n";
+import chalk from "chalk";
 import { bold, highlight, info, warn, err, fail } from "../ui";
 import { loadAliases, resolveProject, resolveServiceType, promptSelect, promptCheckbox } from "../aliases";
 
@@ -246,22 +247,71 @@ export function registerTimeCommands(program: Command): void {
 
         // --- Dry-run mode ---
         if (options.dryRun) {
+          // Fetch existing entries from Abacus (also detects locale)
+          const dates = entries.map((e) => e.date);
+          const existing = await fetchExistingEntries(dates);
+
           console.log("");
           console.log(bold(t().batchDryRun));
           console.log("");
 
+          // Separate planned entries into new vs skipped (duplicate)
+          let skipCount = 0;
+          type Row = { date: string; sortDate: string; project: string; serviceType: string; hours: string; text: string; status: string };
+          const rows: Row[] = [];
+
+          // Add existing entries
+          for (const e of existing) {
+            const [dd, mm, yyyy] = e.date.split(".");
+            rows.push({
+              date: e.date,
+              sortDate: `${yyyy}-${mm}-${dd}`,
+              project: e.project,
+              serviceType: e.serviceType,
+              hours: e.hours.replace(/\s*[A-Za-z]+$/, ""),
+              text: e.text,
+              status: t().dryRunExisting,
+            });
+          }
+
+          // Add only genuinely new entries (skip duplicates — existing row already covers them)
+          for (const entry of entries) {
+            const targetDate = formatDate(entry.date);
+            const isDuplicate = existing.some(
+              (e) => e.date === targetDate && e.project.includes(entry.project)
+            );
+            if (isDuplicate) {
+              skipCount++;
+              continue;
+            }
+            rows.push({
+              date: targetDate,
+              sortDate: entry.date,
+              project: entry.project,
+              serviceType: entry.serviceType,
+              hours: entry.hours.toFixed(2),
+              text: entry.description,
+              status: t().dryRunNew,
+            });
+          }
+
+          rows.sort((a, b) => a.sortDate.localeCompare(b.sortDate));
+
           const table = new Table({
-            head: [t().headerDate, t().headerProject, t().headerServiceType, t().headerHours, t().headerText],
+            head: [t().headerDate, t().headerProject, t().headerServiceType, t().headerHours, t().headerText, t().headerStatus],
             style: { head: ["cyan"] },
           });
 
-          for (const e of entries) {
-            table.push([e.date, e.project, e.serviceType, String(e.hours), e.description]);
+          for (const r of rows) {
+            const statusLabel = r.status === t().dryRunNew ? chalk.green(r.status) : chalk.dim(r.status);
+            table.push([r.date, r.project, r.serviceType, r.hours, r.text, statusLabel]);
           }
 
           console.log(table.toString());
           console.log("");
-          console.log(info(`${entries.length} entries would be created.`));
+
+          const newCount = rows.filter((r) => r.status === t().dryRunNew).length;
+          console.log(info(t().dryRunSummary(newCount, skipCount, existing.length)));
           return;
         }
 

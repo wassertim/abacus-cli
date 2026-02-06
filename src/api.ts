@@ -478,13 +478,13 @@ function promptUser(question: string): Promise<string> {
 // ---------------------------------------------------------------------------
 
 /** Format date from YYYY-MM-DD to DD.MM.YYYY */
-function formatDate(date: string): string {
+export function formatDate(date: string): string {
   const [y, m, d] = date.split("-");
   return `${d}.${m}.${y}`;
 }
 
 /** Extract MM.YYYY from a YYYY-MM-DD date string. */
-function toMonthYear(date: string): string {
+export function toMonthYear(date: string): string {
   const [y, m] = date.split("-");
   return `${m}.${y}`;
 }
@@ -508,6 +508,40 @@ async function setWeekFilter(page: Page, date: string): Promise<void> {
   await input.press("Enter");
   await page.waitForTimeout(500);
   await waitForVaadin(page);
+}
+
+/**
+ * Fetch existing entries from Abacus for the given dates.
+ * Groups dates by month, navigates once, reads each month's grid.
+ */
+export async function fetchExistingEntries(dates: string[]): Promise<ExistingEntry[]> {
+  return withCaptchaRetry(async () => {
+    const { context, close } = await createAuthenticatedContext();
+
+    try {
+      const page = await context.newPage();
+      await navigateToLeistungen(page);
+
+      // Collect unique months from the date list
+      const months = new Set<string>();
+      for (const d of dates) {
+        months.add(toMonthYear(d));
+      }
+
+      const allEntries: ExistingEntry[] = [];
+      for (const monthYear of months) {
+        await setMonthFilter(page, monthYear);
+        spin(t().readingExistingEntries);
+        const entries = await readGridEntries(page);
+        allEntries.push(...entries);
+      }
+
+      stopSpinner();
+      return allEntries;
+    } finally {
+      await close();
+    }
+  });
 }
 
 /**

@@ -108,6 +108,13 @@ export interface Translations {
   batchInvalidFormat: string;
   batchGenerated: (path: string, count: number) => string;
   batchGenerateHint: (path: string) => string;
+
+  // --- CLI output: dry-run status ---
+  headerStatus: string;
+  dryRunNew: string;
+  dryRunSkip: string;
+  dryRunExisting: string;
+  dryRunSummary: (newCount: number, skipCount: number, existingCount: number) => string;
 }
 
 const de: Translations = {
@@ -226,6 +233,13 @@ const de: Translations = {
   batchInvalidFormat: "Ungültiges Dateiformat. Erwartet: .json oder .csv",
   batchGenerated: (path, count) => `${path} mit ${count} fehlenden Tagen generiert.`,
   batchGenerateHint: (path) => `Datei bearbeiten, dann ausführen: abacus time batch --file ${path}`,
+
+  // Dry-run status
+  headerStatus: "Status",
+  dryRunNew: "+ neu",
+  dryRunSkip: "übersprungen",
+  dryRunExisting: "vorhanden",
+  dryRunSummary: (n, s, e) => `${n} neu, ${s} übersprungen (Duplikat), ${e} vorhanden.`,
 };
 
 const en: Translations = {
@@ -344,6 +358,13 @@ const en: Translations = {
   batchInvalidFormat: "Invalid file format. Expected: .json or .csv",
   batchGenerated: (path, count) => `Generated ${path} with ${count} missing days.`,
   batchGenerateHint: (path) => `Edit the file, then run: abacus time batch --file ${path}`,
+
+  // Dry-run status
+  headerStatus: "Status",
+  dryRunNew: "+ new",
+  dryRunSkip: "skip",
+  dryRunExisting: "exists",
+  dryRunSummary: (n, s, e) => `${n} new, ${s} skipped (duplicate), ${e} existing.`,
 };
 
 const fr: Translations = {
@@ -462,6 +483,13 @@ const fr: Translations = {
   batchInvalidFormat: "Format de fichier invalide. Attendu: .json ou .csv",
   batchGenerated: (path, count) => `${path} généré avec ${count} jours manquants.`,
   batchGenerateHint: (path) => `Modifiez le fichier, puis exécutez: abacus time batch --file ${path}`,
+
+  // Dry-run status
+  headerStatus: "Statut",
+  dryRunNew: "+ nouveau",
+  dryRunSkip: "ignoré",
+  dryRunExisting: "existant",
+  dryRunSummary: (n, s, e) => `${n} nouveau${n > 1 ? "x" : ""}, ${s} ignoré${s > 1 ? "s" : ""} (doublon), ${e} existant${e > 1 ? "s" : ""}.`,
 };
 
 const it: Translations = {
@@ -580,6 +608,13 @@ const it: Translations = {
   batchInvalidFormat: "Formato file non valido. Atteso: .json o .csv",
   batchGenerated: (path, count) => `${path} generato con ${count} giorni mancanti.`,
   batchGenerateHint: (path) => `Modifica il file, poi esegui: abacus time batch --file ${path}`,
+
+  // Dry-run status
+  headerStatus: "Stato",
+  dryRunNew: "+ nuovo",
+  dryRunSkip: "ignorato",
+  dryRunExisting: "esistente",
+  dryRunSummary: (n, s, e) => `${n} nuov${n > 1 ? "i" : "o"}, ${s} ignorat${s > 1 ? "i" : "o"} (duplicato), ${e} esistent${e > 1 ? "i" : "e"}.`,
 };
 
 const es: Translations = {
@@ -698,6 +733,13 @@ const es: Translations = {
   batchInvalidFormat: "Formato de archivo inválido. Esperado: .json o .csv",
   batchGenerated: (path, count) => `${path} generado con ${count} días faltantes.`,
   batchGenerateHint: (path) => `Edite el archivo, luego ejecute: abacus time batch --file ${path}`,
+
+  // Dry-run status
+  headerStatus: "Estado",
+  dryRunNew: "+ nuevo",
+  dryRunSkip: "omitido",
+  dryRunExisting: "existente",
+  dryRunSummary: (n, s, e) => `${n} nuevo${n > 1 ? "s" : ""}, ${s} omitido${s > 1 ? "s" : ""} (duplicado), ${e} existente${e > 1 ? "s" : ""}.`,
 };
 
 const locales: Record<Locale, Translations> = { de, en, fr, it, es };
