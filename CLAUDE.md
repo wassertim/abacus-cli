@@ -23,24 +23,34 @@ No test framework or linter is configured.
 ```bash
 abacus login                          # Opens browser for manual login, saves session
 abacus discover                       # Captures network requests for API exploration
-abacus time log --project <id> --hours <n> [--service-type <id>] [--text <text>] [--date <YYYY-MM-DD>]
+abacus time log --hours <n> --text <text> [--project <id>] [--service-type <id>] [--date <YYYY-MM-DD>]
+abacus time list [--monthYear <MM.YYYY>]
+abacus time status [--date <YYYY-MM-DD>]
+abacus time batch [--project <id> --hours <n>] [--file <path>] [--generate] [--dry-run]
+abacus time delete [--date <YYYY-MM-DD> --project <id>]
+abacus summary                        # Compact weekly status (cached, auto-fetches if stale)
+abacus check                          # Silent missing-days check (for .zshrc)
+abacus refresh [--install|--uninstall] # Session keep-alive / launchd daemon
+abacus config show|set <key> <value>  # Manage configuration
+abacus alias list|add|remove          # Manage project/service-type aliases
 ```
 
 ## Architecture
 
-**Entry point:** `src/index.ts` — Commander.js CLI with three commands: `login`, `discover`, `time`.
+**Entry point:** `src/index.ts` — Commander.js CLI with commands: `login`, `discover`, `time`, `summary`, `check`, `refresh`, `config`, `alias`.
 
 **Core automation flow:**
-1. `src/auth.ts` — Session management. Opens a real browser for manual login, persists cookies/localStorage to `~/.abacus-cli/state.json`, restores session for subsequent commands.
-2. `src/api.ts` — Vaadin browser automation. The key abstraction layer:
-   - `waitForVaadin(page)` — Polls `Vaadin.Flow.clients` to ensure no pending server requests before proceeding.
-   - `fillCombobox(page, movieId, value)` — Types character-by-character with delays to trigger Vaadin's filter events, then presses Enter to select.
-   - `logTime(entry)` — Full workflow: navigate to page, check for duplicates, fill form fields, save automatically.
-   - Form fields are identified by Vaadin's `movie-id` attribute (e.g., ProjNr2, LeArtNr, Menge, Text).
-3. `src/i18n.ts` — Multi-language support. Translations for de/en/fr/it/es, locale auto-detection, and `t()` accessor for all UI and CLI strings.
-4. `src/config.ts` — Config paths (`~/.abacus-cli/`) and helpers.
-5. `src/commands/time.ts` — The `time log` subcommand with flag parsing.
-6. `src/discover.ts` — Network interceptor that captures XHR/fetch requests for debugging.
+1. `src/auth.ts` — Session management. Opens a real browser for manual login, persists cookies/localStorage to `~/.abacus-cli/state.json`, restores session for subsequent commands. Also manages the launchd refresh daemon.
+2. `src/api.ts` — High-level Abacus operations (log, list, delete, status, batch). Orchestrates page navigation, duplicate detection, and cache management.
+3. `src/page.ts` — Page-level interactions: navigation, grid reading, form filling, side panel operations. Handles Vaadin's async server round-trips.
+4. `src/vaadin.ts` — Low-level Vaadin primitives: `waitForVaadin()` and `fillCombobox()`.
+5. `src/i18n.ts` — Multi-language support. Translations for de/en/fr/it/es, locale auto-detection, and `t()` accessor for all UI and CLI strings.
+6. `src/config.ts` — Config paths (`~/.abacus-cli/`) and helpers.
+7. `src/aliases.ts` — Project/service-type alias resolution and interactive prompts.
+8. `src/ui.ts` — Console output helpers (colored output, spinners, user prompts).
+9. `src/commands/time.ts` — Time subcommands: `log`, `list`, `status`, `delete`, `batch`.
+10. `src/commands/alias.ts` — Alias subcommands: `list`, `add`, `remove`.
+11. `src/discover.ts` — Network interceptor that captures XHR/fetch requests for debugging.
 
 **Key pattern:** Vaadin comboboxes require special handling — char-by-char input with 50ms delays + `waitForVaadin()` between interactions. Direct `.fill()` doesn't trigger Vaadin's server-side filtering.
 

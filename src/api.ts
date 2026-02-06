@@ -192,7 +192,9 @@ async function refreshWeekCache(page: Page): Promise<void> {
     let existingCache: Record<string, unknown> | null = null;
     try {
       existingCache = JSON.parse(fs.readFileSync(config.statusCachePath, "utf-8"));
-    } catch {}
+    } catch {
+      // Cache may not exist yet; fall back to defaults
+    }
 
     const target = (existingCache?.target as number) || 40;
     const remaining = Math.max(0, target - worked);

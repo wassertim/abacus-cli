@@ -120,7 +120,9 @@ export async function createAuthenticatedContext(): Promise<{
       try {
         const state = await context.storageState();
         fs.writeFileSync(config.statePath, JSON.stringify(state, null, 2));
-      } catch {}
+      } catch {
+        // Session update is best-effort; failure here is non-critical
+      }
       await browser.close();
     },
   };
@@ -151,7 +153,9 @@ export async function refresh(): Promise<void> {
       execSync(
         `osascript -e 'display notification "Session expired — run abacus login" with title "Abacus CLI"'`
       );
-    } catch {}
+    } catch {
+      // Notification is optional; may fail on non-macOS or headless environments
+    }
     await close();
     process.exit(1);
   }

@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/timpetri/abacus-cli.git"
+    "url": "https://github.com/wassertim/abacus-cli.git"
   },
-  "homepage": "https://github.com/timpetri/abacus-cli#readme",
+  "homepage": "https://github.com/wassertim/abacus-cli#readme",
   "bugs": {
-    "url": "https://github.com/timpetri/abacus-cli/issues"
+    "url": "https://github.com/wassertim/abacus-cli/issues"
   },
   "keywords": [
     "abacus",

@@ -12,7 +12,7 @@ Abacus uses Vaadin (a server-side Java UI framework) with no REST API, so all in
 ## Setup
 
 ```bash
-git clone https://github.com/youruser/abacus-cli.git
+git clone https://github.com/wassertim/abacus-cli.git
 cd abacus-cli
 npm install
 npm run build
@@ -50,10 +50,10 @@ abacus time log --project 71100000001 --hours 8 --service-type 1435 --text "Deve
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--project <id>` | yes | — | Project number |
+| `--project <id>` | no | — | Project number or alias (interactive prompt if omitted) |
 | `--hours <n>` | yes | — | Hours to log |
-| `--service-type <id>` | no | `1435` | Service type ID |
-| `--text <text>` | no | — | Description |
+| `--service-type <id>` | no | `1435` | Service type ID or alias |
+| `--text <text>` | yes | — | Description |
 | `--date <YYYY-MM-DD>` | no | today | Entry date |
 
 If a matching entry (same date + project) already exists, you'll be prompted to update it or create a new one.
@@ -187,6 +187,42 @@ Add to your `~/.zshrc` for a greeting reminder:
 
 ```bash
 abacus check 2>/dev/null
+```
+
+### Aliases
+
+Create short names for frequently used project numbers and service types.
+
+```bash
+abacus alias list
+abacus alias add project myproj 71100000001
+abacus alias add service-type dev 1435
+abacus alias remove project myproj
+```
+
+Once defined, use aliases anywhere instead of numeric IDs:
+
+```bash
+abacus time log --project myproj --hours 8 --text "Development"
+```
+
+### Configuration
+
+```bash
+abacus config show                          # Show current config and sources
+abacus config set url https://your-instance.example.com/portal/myabacus
+abacus config set locale de                 # Override locale (de, en, fr, it, es)
+```
+
+### Session refresh
+
+Keep your saved session alive by refreshing it periodically. On macOS, you can install a launchd agent to do this automatically.
+
+```bash
+abacus refresh                    # Refresh session once
+abacus refresh --install          # Install auto-refresh daemon (default: every 15 min)
+abacus refresh --install --interval 30   # Custom interval
+abacus refresh --uninstall        # Remove daemon
 ```
 
 ### Discover API calls
