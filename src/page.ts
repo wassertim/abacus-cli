@@ -481,36 +481,39 @@ export async function navigateToWochenrapport(page: Page): Promise<void> {
  * Read the weekly totals from the Wochenrapport page grid.
  * The grid is built from individual div.va-flex-layout elements (1 child each).
  * Pattern: [label] [Mon] [Tue] [Wed] [Thu] [Fri] [Total] [empty]
- * We scan for label cells and read the Total (6 positions after the label).
- * Row 0 (after "In & Out" section): Istzeit = worked, then Sollzeit = target, Differenz.
+ * We find rows whose Total column (offset +6) contains a time value.
+ * The last 3 such rows are always: worked, target, difference (language-independent).
  */
 export async function readWeeklyReport(page: Page): Promise<WeeklyReport | null> {
-  const data = await page.evaluate(() => {
+  const totals = await page.evaluate(() => {
     const content = document.querySelector('.va-portal-page-content');
     if (!content) return null;
 
     const flexLayouts = Array.from(content.querySelectorAll('div.va-flex-layout'));
     const texts = flexLayouts.map(fl => fl.textContent?.trim() || "");
 
-    // Find row labels and extract the Total value (6 positions after label)
-    const result: Record<string, string> = {};
-    const labels = ["Istzeit", "Sollzeit", "Differenz"];
+    // Rows are 8 cells: [label, Mon, Tue, Wed, Thu, Fri, Total, spacer]
+    // Scan for label cells whose Total column (offset +6) is a decimal number.
+    // Values use dot-decimal format: "8.00", "32.00", "-8.00".
+    const numPattern = /^-?\d+\.\d{2}$/;
+    const rowTotals: string[] = [];
 
     for (let i = 0; i < texts.length; i++) {
-      if (labels.includes(texts[i]) && i + 6 < texts.length) {
-        result[texts[i]] = texts[i + 6];
+      if (texts[i] && !numPattern.test(texts[i]) && i + 6 < texts.length && numPattern.test(texts[i + 6])) {
+        rowTotals.push(texts[i + 6]);
       }
     }
 
-    return result;
+    // First 3 matching rows are: worked (Istzeit), target (Sollzeit), difference
+    return rowTotals.slice(0, 3);
   });
 
-  if (!data || !data["Istzeit"] || !data["Sollzeit"]) return null;
+  if (!totals || totals.length < 2) return null;
 
   return {
-    worked: parseHoursValue(data["Istzeit"]),
-    target: parseHoursValue(data["Sollzeit"]),
-    difference: data["Differenz"] ? parseHoursValue(data["Differenz"]) : 0,
+    worked: parseHoursValue(totals[0]),
+    target: parseHoursValue(totals[1]),
+    difference: totals.length >= 3 ? parseHoursValue(totals[2]) : 0,
   };
 }
 
