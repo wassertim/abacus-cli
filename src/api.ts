@@ -3,36 +3,44 @@
 
 import { Page } from "rebrowser-playwright-core";
 import * as readline from "readline";
+import Table from "cli-table3";
 import { createAuthenticatedContext } from "./auth";
 import { config } from "./config";
+import { t, detectLocale, setLocale, confirmDeleteKey, Locale } from "./i18n";
+import * as fs from "fs";
+import chalk from "chalk";
+import {
+  success, err, warn, info, bold, highlight, dim,
+  spin, stopSpinner, succeed, fail,
+} from "./ui";
 
 /** Retry wrapper: if FortiADC captcha is solved, retry the operation once. */
 async function withCaptchaRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
-  } catch (err: unknown) {
-    if (err instanceof Error && err.message === "CAPTCHA_SOLVED_RETRY") {
-      console.log("Captcha solved. Retrying...");
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === "CAPTCHA_SOLVED_RETRY") {
+      spin(t().captchaRetry);
       return fn();
     }
-    throw err;
+    throw error;
   }
 }
 
 export interface TimeEntry {
   project: string;
-  leistungsart: string;
+  serviceType: string;
   hours: number;
   date: string; // YYYY-MM-DD
-  buchungstext: string;
+  description: string;
 }
 
 export interface ExistingEntry {
-  datum: string;
-  projekt: string;
-  leistungsart: string;
+  date: string;
+  project: string;
+  serviceType: string;
   text: string;
-  anzahl: string;
+  hours: string;
   status: string;
   rowIndex: number;
 }
@@ -73,14 +81,47 @@ async function fillCombobox(
   await waitForVaadin(page);
 }
 
-/** Navigate to Leistungen page via Rapportierung menu. */
+/**
+ * Select a Vaadin combobox item by its position (aria-posinset).
+ * Opens the dropdown and clicks the item directly — language-independent.
+ */
+async function selectComboboxByIndex(
+  page: Page,
+  movieId: string,
+  posinset: number
+): Promise<void> {
+  const combo = page.locator(`vaadin-combo-box[movie-id="${movieId}"]`);
+  const input = combo.locator("input");
+
+  // Open the dropdown
+  await input.click();
+  await page.waitForTimeout(300);
+
+  // Click the item by aria-posinset
+  await page
+    .locator(`vaadin-combo-box-item[aria-posinset="${posinset}"]`)
+    .click();
+  await waitForVaadin(page);
+}
+
+/** Initialize locale: use env var override or auto-detect from the page. */
+async function initLocale(page: Page): Promise<void> {
+  if (config.locale) {
+    setLocale(config.locale as Locale);
+  } else {
+    const detected = await detectLocale(page);
+    setLocale(detected);
+  }
+}
+
+/** Navigate to the services (Leistungen) page via the time tracking menu. */
 async function navigateToLeistungen(page: Page): Promise<void> {
-  console.log("Navigating to Abacus portal...");
+  spin(t().navigatingToPortal);
   await page.goto(config.abacusUrl, { waitUntil: "networkidle" });
 
   // Detect FortiADC captcha redirect
   if (page.url().includes("fortiadc_captcha")) {
-    console.log("FortiADC captcha detected. Reopening in headed mode...");
+    fail(warn(t().captchaDetected));
 
     // Get the browser context to access storageState and relaunch
     const context = page.context();
@@ -106,8 +147,8 @@ async function navigateToLeistungen(page: Page): Promise<void> {
     const headedPage = await headedContext.newPage();
     await headedPage.goto(config.abacusUrl, { waitUntil: "networkidle" });
 
-    console.log("Please solve the captcha in the browser window.");
-    console.log("Waiting for portal to load...");
+    console.log(t().captchaSolve);
+    console.log(t().captchaWaiting);
 
     // Wait for captcha to be solved and portal to load
     await headedPage.waitForFunction(
@@ -141,20 +182,21 @@ async function navigateToLeistungen(page: Page): Promise<void> {
 
   if (!menuVisible) {
     const url = page.url();
-    throw new Error(
-      `Session abgelaufen oder Seite nicht geladen (URL: ${url}). Bitte 'abacus login' erneut ausführen.`
-    );
+    throw new Error(t().sessionExpired(url));
   }
 
-  console.log("Opening Rapportierung menu...");
+  // Auto-detect locale after page loads and before navigating further
+  await initLocale(page);
+
+  spin(t().openingTimeTracking);
   const isExpanded = await rapportierungToggle.getAttribute("aria-expanded");
   if (isExpanded !== "true") {
     await rapportierungToggle.click();
     await waitForVaadin(page);
   }
 
-  console.log("Opening Leistungen...");
-  await page.locator('a[title="Leistungen"]').click();
+  spin(t().openingServices);
+  await page.locator('a[href^="proj_services"]').click();
   await waitForVaadin(page);
 }
 
@@ -163,15 +205,15 @@ async function navigateToLeistungen(page: Page): Promise<void> {
  * @param monthYear — format "MM.YYYY" e.g. "01.2025"
  */
 async function setMonthFilter(page: Page, monthYear: string): Promise<void> {
-  // Set Ansicht to "Monat"
-  console.log("Setting Ansicht to Monat...");
-  await fillCombobox(page, "cmbDateRange", "Monat");
+  // Set view to "Month" (position 3 in dropdown)
+  spin(t().settingViewMonth);
+  await selectComboboxByIndex(page, "cmbDateRange", 3);
 
   // Set Datum to the first day of the requested month
   const [mm, yyyy] = monthYear.split(".");
   const formattedDate = `01.${mm}.${yyyy}`;
 
-  console.log(`Setting Datum to ${formattedDate}...`);
+  spin(t().settingDate(formattedDate));
   const datePicker = page.locator("vaadin-date-picker#dateField");
   const input = datePicker.locator("input");
 
@@ -186,10 +228,8 @@ async function setMonthFilter(page: Page, monthYear: string): Promise<void> {
 /** Read all visible entries from the Leistungen grid. */
 async function readGridEntries(page: Page): Promise<ExistingEntry[]> {
   // Check for empty state first
-  const emptyMsg = page.locator(
-    'text="Für diese Auswahl sind keine Leistungen vorhanden"'
-  );
-  if (await emptyMsg.isVisible().catch(() => false)) {
+  const emptyState = page.locator(".va-empty-state");
+  if (await emptyState.isVisible().catch(() => false)) {
     return [];
   }
 
@@ -203,7 +243,7 @@ async function readGridEntries(page: Page): Promise<ExistingEntry[]> {
     if (!tbody) return [];
 
     const rows = Array.from(tbody.querySelectorAll("tr"));
-    const results: { card: string[]; text: string; anzahl: string; status: string }[] = [];
+    const results: { card: string[]; text: string; hours: string; status: string }[] = [];
 
     for (const row of rows) {
       const cells = Array.from(row.querySelectorAll("td"));
@@ -216,7 +256,7 @@ async function readGridEntries(page: Page): Promise<ExistingEntry[]> {
         return assigned.length > 0 ? assigned[0] : null;
       };
 
-      // Cell 0: card with date + project + leistungsart as separate child elements
+      // Cell 0: card with date + project + service type as separate child elements
       const cardEl = getSlotContent(0);
       const card: string[] = [];
       if (cardEl) {
@@ -232,34 +272,34 @@ async function readGridEntries(page: Page): Promise<ExistingEntry[]> {
         }
       }
 
-      // Cell 1: buchungstext
+      // Cell 1: description/text
       const textEl = getSlotContent(1);
       const text = textEl?.textContent?.trim() || "";
 
-      // Cell 2: anzahl/hours
-      const anzahlEl = getSlotContent(2);
-      const anzahl = anzahlEl?.textContent?.trim() || "";
+      // Cell 2: hours
+      const hoursEl = getSlotContent(2);
+      const hours = hoursEl?.textContent?.trim() || "";
 
       // Cell 3: status
       const statusEl = getSlotContent(3);
       const status = statusEl?.textContent?.trim() || "";
 
       // Skip empty rows
-      if (card.length === 0 && !text && !anzahl) continue;
+      if (card.length === 0 && !text && !hours) continue;
 
-      results.push({ card, text, anzahl, status });
+      results.push({ card, text, hours, status });
     }
 
     return results;
   });
 
   return raw.map((r, i) => ({
-    // Card parts: [0]=date, [1]=project, [2]=leistungsart
-    datum: r.card[0] || "",
-    projekt: r.card[1] || "",
-    leistungsart: r.card[2] || "",
+    // Card parts: [0]=date, [1]=project, [2]=serviceType
+    date: r.card[0] || "",
+    project: r.card[1] || "",
+    serviceType: r.card[2] || "",
     text: r.text,
-    anzahl: r.anzahl,
+    hours: r.hours,
     status: r.status,
     rowIndex: i,
   }));
@@ -297,7 +337,7 @@ async function clickRow(page: Page, rowIndex: number): Promise<void> {
 async function fillForm(page: Page, entry: TimeEntry): Promise<void> {
   // Datum (movie-id="ProjDat")
   const formattedDate = formatDate(entry.date);
-  console.log(`Setting Datum: ${formattedDate}`);
+  spin(t().settingDateField(formattedDate));
   const dateInput = page.locator('vaadin-date-picker[movie-id="ProjDat"] input');
   await dateInput.click({ clickCount: 3 });
   await page.keyboard.press("Backspace");
@@ -306,19 +346,19 @@ async function fillForm(page: Page, entry: TimeEntry): Promise<void> {
   await waitForVaadin(page);
 
   // Projekt-Nr. (movie-id="ProjNr2")
-  console.log(`Setting Projekt-Nr.: ${entry.project}`);
+  spin(t().settingProject(entry.project));
   await fillCombobox(page, "ProjNr2", entry.project);
 
-  // Leistungsart (movie-id="LeArtNr") — appears after project selection
-  console.log(`Setting Leistungsart: ${entry.leistungsart}`);
-  const leistungsartCombo = page.locator(
+  // Service type (movie-id="LeArtNr") — appears after project selection
+  spin(t().settingServiceType(entry.serviceType));
+  const serviceTypeCombo = page.locator(
     'vaadin-combo-box[movie-id="LeArtNr"]'
   );
-  await leistungsartCombo.waitFor({ state: "visible", timeout: 10_000 });
-  await fillCombobox(page, "LeArtNr", entry.leistungsart);
+  await serviceTypeCombo.waitFor({ state: "visible", timeout: 10_000 });
+  await fillCombobox(page, "LeArtNr", entry.serviceType);
 
-  // Stunden (movie-id="Menge")
-  console.log(`Setting Stunden: ${entry.hours}`);
+  // Hours (movie-id="Menge")
+  spin(t().settingHours(entry.hours));
   const hoursField = page.locator(
     'vaadin-text-field[movie-id="Menge"] input'
   );
@@ -328,15 +368,15 @@ async function fillForm(page: Page, entry: TimeEntry): Promise<void> {
   await hoursField.fill(String(entry.hours));
   await waitForVaadin(page);
 
-  // Buchungstext (movie-id="Text")
-  if (entry.buchungstext) {
-    console.log(`Setting Buchungstext: ${entry.buchungstext}`);
-    const buchungstext = page.locator(
+  // Description (movie-id="Text")
+  if (entry.description) {
+    spin(t().settingDescription(entry.description));
+    const descriptionField = page.locator(
       'vaadin-text-field[movie-id="Text"] input'
     );
-    await buchungstext.click({ clickCount: 3 });
+    await descriptionField.click({ clickCount: 3 });
     await page.keyboard.press("Backspace");
-    await buchungstext.fill(entry.buchungstext);
+    await descriptionField.fill(entry.description);
     await waitForVaadin(page);
   }
 }
@@ -350,8 +390,8 @@ async function deleteSidePanelEntry(page: Page): Promise<void> {
   await dotsBtn.click();
   await page.waitForTimeout(300);
 
-  // Click "Löschen" in the popup menu
-  await page.getByText("Löschen", { exact: true }).click();
+  // Click delete in the popup menu
+  await page.locator('vaadin-context-menu-item[movie-id="deleteActionBtn"]').click();
   await waitForVaadin(page);
 
   // Confirm deletion in the dialog
@@ -359,6 +399,63 @@ async function deleteSidePanelEntry(page: Page): Promise<void> {
   await confirmBtn.waitFor({ state: "visible", timeout: 10_000 });
   await confirmBtn.click();
   await waitForVaadin(page);
+}
+
+/** Delete a grid row directly via the inline three-dot context menu. */
+async function deleteRowViaContextMenu(page: Page, rowIndex: number): Promise<void> {
+  // Click the three-dot menu button on the target row
+  const btnBox = await page.evaluate((idx) => {
+    const grid = document.querySelector('vaadin-grid[movie-id="ServicesList"]');
+    if (!grid || !grid.shadowRoot) return null;
+    const tbody = grid.shadowRoot.querySelector("#items");
+    if (!tbody) return null;
+    const rows = tbody.querySelectorAll("tr");
+    if (!rows[idx]) return null;
+    // The menu button is in the last cell's slotted content
+    const cells = rows[idx].querySelectorAll("td");
+    for (const cell of Array.from(cells)) {
+      const slot = cell.querySelector("slot") as HTMLSlotElement | null;
+      if (!slot) continue;
+      const assigned = slot.assignedElements();
+      for (const el of assigned) {
+        const btn = el.querySelector("vaadin-button.dl-menubutton") || (el.matches("vaadin-button.dl-menubutton") ? el : null);
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+        }
+      }
+    }
+    return null;
+  }, rowIndex);
+
+  if (!btnBox) throw new Error(`Menu button not found on row ${rowIndex}`);
+
+  await page.mouse.click(btnBox.x, btnBox.y);
+
+  // Wait for the context menu overlay to appear
+  const deleteItem = page.locator('vaadin-context-menu-item[movie-id="datalist_context_delete"]');
+  await deleteItem.waitFor({ state: "visible", timeout: 10_000 });
+  await deleteItem.click();
+  await waitForVaadin(page);
+
+  // Confirm deletion in the dialog
+  const confirmBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
+  await confirmBtn.waitFor({ state: "visible", timeout: 10_000 });
+  await confirmBtn.click();
+  await waitForVaadin(page);
+
+  // Wait for confirm dialog to close and grid to stabilize
+  await confirmBtn.waitFor({ state: "hidden", timeout: 10_000 });
+  await page.waitForTimeout(500);
+}
+
+/** Close the side panel if it's currently open. */
+async function closeSidePanelIfOpen(page: Page): Promise<void> {
+  const panel = page.locator('va-side-panel[movie-id="id_editRecordSidePanel"]');
+  if (await panel.isVisible().catch(() => false)) {
+    await page.locator('vaadin-button[movie-id="sidepanel_btnClose"]').click();
+    await waitForVaadin(page);
+  }
 }
 
 /** Prompt the user for input in the terminal. */
@@ -381,13 +478,13 @@ function promptUser(question: string): Promise<string> {
 // ---------------------------------------------------------------------------
 
 /** Format date from YYYY-MM-DD to DD.MM.YYYY */
-function formatDate(date: string): string {
+export function formatDate(date: string): string {
   const [y, m, d] = date.split("-");
   return `${d}.${m}.${y}`;
 }
 
 /** Extract MM.YYYY from a YYYY-MM-DD date string. */
-function toMonthYear(date: string): string {
+export function toMonthYear(date: string): string {
   const [y, m] = date.split("-");
   return `${m}.${y}`;
 }
@@ -397,11 +494,11 @@ function toMonthYear(date: string): string {
  * @param date — format "YYYY-MM-DD"
  */
 async function setWeekFilter(page: Page, date: string): Promise<void> {
-  console.log("Setting Ansicht to Woche...");
-  await fillCombobox(page, "cmbDateRange", "Woche");
+  spin(t().settingViewWeek);
+  await selectComboboxByIndex(page, "cmbDateRange", 2);
 
   const formattedDate = formatDate(date);
-  console.log(`Setting Datum to ${formattedDate}...`);
+  spin(t().settingDate(formattedDate));
   const datePicker = page.locator("vaadin-date-picker#dateField");
   const input = datePicker.locator("input");
 
@@ -414,7 +511,41 @@ async function setWeekFilter(page: Page, date: string): Promise<void> {
 }
 
 /**
- * Show the Rapportmatrix (time account status) for the week containing the given date.
+ * Fetch existing entries from Abacus for the given dates.
+ * Groups dates by month, navigates once, reads each month's grid.
+ */
+export async function fetchExistingEntries(dates: string[]): Promise<ExistingEntry[]> {
+  return withCaptchaRetry(async () => {
+    const { context, close } = await createAuthenticatedContext();
+
+    try {
+      const page = await context.newPage();
+      await navigateToLeistungen(page);
+
+      // Collect unique months from the date list
+      const months = new Set<string>();
+      for (const d of dates) {
+        months.add(toMonthYear(d));
+      }
+
+      const allEntries: ExistingEntry[] = [];
+      for (const monthYear of months) {
+        await setMonthFilter(page, monthYear);
+        spin(t().readingExistingEntries);
+        const entries = await readGridEntries(page);
+        allEntries.push(...entries);
+      }
+
+      stopSpinner();
+      return allEntries;
+    } finally {
+      await close();
+    }
+  });
+}
+
+/**
+ * Show the time report (weekly status) for the week containing the given date.
  * @param date — format "YYYY-MM-DD", defaults to today
  */
 export async function statusTime(date: string): Promise<void> {
@@ -426,7 +557,7 @@ export async function statusTime(date: string): Promise<void> {
     await navigateToLeistungen(page);
     await setWeekFilter(page, date);
 
-    console.log("Reading Rapportmatrix...");
+    spin(t().readingTimeReport);
 
     const rows = await page.evaluate(() => {
       const panel = document.querySelector(
@@ -460,33 +591,23 @@ export async function statusTime(date: string): Promise<void> {
     });
 
     if (rows.length === 0) {
-      console.log("Rapportmatrix nicht gefunden.");
+      fail(err(t().timeReportNotFound));
       return;
     }
 
-    const labelWidth = Math.max(...rows.map((r) => r.label.length));
-    const col1Width = Math.max(6, ...rows.map((r) => r.col1.length));
+    stopSpinner();
 
-    console.log("");
-    console.log(
-      "Rapportmatrix".padEnd(labelWidth) +
-        "  " +
-        "Tag".padStart(col1Width) +
-        "  " +
-        "Total"
-    );
-    console.log("-".repeat(labelWidth + col1Width + 12));
+    const table = new Table({
+      head: [t().timeReportTitle, t().colDay, t().colTotal],
+      style: { head: ["cyan"] },
+    });
 
     for (const r of rows) {
-      console.log(
-        r.label.padEnd(labelWidth) +
-          "  " +
-          r.col1.padStart(col1Width) +
-          "  " +
-          r.col2
-      );
+      table.push([r.label, r.col1, r.col2]);
     }
+
     console.log("");
+    console.log(table.toString());
 
     // --- Hints ---
     const entries = await readGridEntries(page);
@@ -503,20 +624,20 @@ export async function statusTime(date: string): Promise<void> {
       targetDate.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) - 1)
     );
 
-    const missingDays: string[] = [];
+    const missingDaysList: string[] = [];
     for (let d = new Date(monday); d <= today; d.setDate(d.getDate() + 1)) {
       const dow = d.getDay();
       if (dow === 0 || dow === 6) continue; // skip weekends
       const dStr = formatDate(d.toISOString().split("T")[0]);
-      const hasEntry = entries.some((e) => e.datum === dStr);
+      const hasEntry = entries.some((e) => e.date === dStr);
       if (!hasEntry) {
-        missingDays.push(dStr);
+        missingDaysList.push(dStr);
       }
     }
 
-    if (missingDays.length > 0) {
+    if (missingDaysList.length > 0) {
       console.log(
-        `Du hast an ${missingDays.length} Tag${missingDays.length > 1 ? "en" : ""} nicht gebucht: ${missingDays.join(", ")}`
+        warn(t().missingDays(missingDaysList.length, missingDaysList.join(", ")))
       );
     }
 
@@ -526,20 +647,20 @@ export async function statusTime(date: string): Promise<void> {
       const diff = parseFloat(diffRow.col2.replace(",", "."));
       if (diff < 0) {
         const missing = Math.abs(diff);
-        console.log(`Dir fehlen noch ${missing.toFixed(2)} Stunden.`);
+        console.log(warn(t().missingHours(missing.toFixed(2))));
 
         // Suggest command based on last entry
         const lastEntry = entries[entries.length - 1];
         if (lastEntry) {
           // Extract project number (before the dot)
-          const projektNr = lastEntry.projekt.split(".")[0].trim();
-          // Extract leistungsart number
-          const leistungsartNr = lastEntry.leistungsart.split(".")[0].trim();
+          const projectNr = lastEntry.project.split(".")[0].trim();
+          // Extract service type number
+          const serviceTypeNr = lastEntry.serviceType.split(".")[0].trim();
           const hours = Math.min(missing, 8);
           console.log("");
-          console.log("Beispiel:");
+          console.log(bold(t().exampleLabel));
           console.log(
-            `  npx abacus time log --project ${projektNr} --hours ${hours.toFixed(2)} --leistungsart ${leistungsartNr} --text "${lastEntry.text || "..."}" --date ${missingDays.length > 0 ? missingDays[0].split(".").reverse().join("-") : date}`
+            dim(`  npx abacus time log --project ${projectNr} --hours ${hours.toFixed(2)} --service-type ${serviceTypeNr} --text "${lastEntry.text || "..."}" --date ${missingDaysList.length > 0 ? missingDaysList[0].split(".").reverse().join("-") : date}`)
           );
         }
       }
@@ -565,54 +686,90 @@ export async function listTime(monthYear: string): Promise<void> {
     await navigateToLeistungen(page);
     await setMonthFilter(page, monthYear);
 
-    console.log("Reading entries...");
+    spin(t().readingEntries);
     const entries = await readGridEntries(page);
 
-    if (entries.length === 0) {
-      console.log("Keine Einträge gefunden.");
-      return;
+    stopSpinner();
+
+    // Compute weekdays in the month up to today
+    const [mm, yyyy] = monthYear.split(".");
+    const year = parseInt(yyyy, 10);
+    const month = parseInt(mm, 10) - 1; // 0-indexed
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const lastDay = new Date(year, month + 1, 0); // last day of month
+    const endDate = lastDay < today ? lastDay : today;
+
+    const weekdays: string[] = [];
+    for (
+      let d = new Date(year, month, 1);
+      d <= endDate;
+      d.setDate(d.getDate() + 1)
+    ) {
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue;
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mmStr = String(d.getMonth() + 1).padStart(2, "0");
+      weekdays.push(`${dd}.${mmStr}.${d.getFullYear()}`);
     }
 
-    // Compute column widths from data
-    const cols = {
-      datum: Math.max(5, ...entries.map((e) => e.datum.length)),
-      projekt: Math.max(7, ...entries.map((e) => e.projekt.length)),
-      leistungsart: Math.max(12, ...entries.map((e) => e.leistungsart.length)),
-      anzahl: Math.max(7, ...entries.map((e) => e.anzahl.length)),
-    };
-
-    const header =
-      "Datum".padEnd(cols.datum) +
-      "  " +
-      "Projekt".padEnd(cols.projekt) +
-      "  " +
-      "Leistungsart".padEnd(cols.leistungsart) +
-      "  " +
-      "Stunden".padStart(cols.anzahl) +
-      "  " +
-      "Text";
-    const line = "-".repeat(header.length);
-
-    console.log("");
-    console.log(header);
-    console.log(line);
-
+    // Group entries by date
+    const entriesByDate = new Map<string, ExistingEntry[]>();
     for (const e of entries) {
-      console.log(
-        e.datum.padEnd(cols.datum) +
-          "  " +
-          e.projekt.padEnd(cols.projekt) +
-          "  " +
-          e.leistungsart.padEnd(cols.leistungsart) +
-          "  " +
-          e.anzahl.padStart(cols.anzahl) +
-          "  " +
-          e.text
-      );
+      const list = entriesByDate.get(e.date) || [];
+      list.push(e);
+      entriesByDate.set(e.date, list);
+    }
+
+    // Build table with missing-day warnings interleaved
+    const table = new Table({
+      head: [
+        t().headerDate,
+        t().headerProject,
+        t().headerServiceType,
+        t().headerHours,
+        t().headerText,
+      ],
+      style: { head: ["cyan"] },
+    });
+
+    let missingCount = 0;
+    const datesRendered = new Set<string>();
+
+    for (const day of weekdays) {
+      const dayEntries = entriesByDate.get(day);
+      datesRendered.add(day);
+      if (dayEntries && dayEntries.length > 0) {
+        for (const e of dayEntries) {
+          table.push([e.date, e.project, e.serviceType, e.hours, e.text]);
+        }
+      } else {
+        missingCount++;
+        table.push([
+          chalk.yellow(day),
+          chalk.yellow(`⚠ ${t().missingDayRow}`),
+          "",
+          "",
+          "",
+        ]);
+      }
+    }
+
+    // Append entries with dates outside the weekday range (e.g. weekend entries)
+    for (const e of entries) {
+      if (!datesRendered.has(e.date)) {
+        table.push([e.date, e.project, e.serviceType, e.hours, e.text]);
+        datesRendered.add(e.date);
+      }
     }
 
     console.log("");
-    console.log(`${entries.length} Einträge total.`);
+    console.log(table.toString());
+    console.log("");
+    console.log(info(t().entriesTotal(entries.length)));
+    if (missingCount > 0) {
+      console.log(warn(t().missingDaysSummary(missingCount)));
+    }
   } finally {
     await close();
   }
@@ -633,32 +790,29 @@ export async function logTime(entry: TimeEntry): Promise<void> {
     await setMonthFilter(page, toMonthYear(entry.date));
 
     // Read entries and check for duplicate
-    console.log("Reading existing entries...");
+    spin(t().readingExistingEntries);
     const allEntries = await readGridEntries(page);
     const targetDate = formatDate(entry.date);
     const match = allEntries.find(
-      (e) => e.datum === targetDate && e.projekt.includes(entry.project)
+      (e) => e.date === targetDate && e.project.includes(entry.project)
     );
 
     if (match) {
+      stopSpinner();
       console.log("");
-      console.log(
-        `${match.anzahl} bereits gebucht am ${match.datum} für Projekt ${match.projekt}`
-      );
-      console.log(`  Leistungsart: ${match.leistungsart}`);
-      if (match.text) console.log(`  Text: ${match.text}`);
+      console.log(warn(t().alreadyBooked(match.hours, match.date, match.project)));
+      console.log(`  ${t().serviceTypeLabel}: ${match.serviceType}`);
+      if (match.text) console.log(`  ${t().textLabel}: ${match.text}`);
       console.log("");
 
-      const answer = await promptUser(
-        "Bestehenden updaten oder neuen hinzufügen? [u/n] "
-      );
+      const answer = await promptUser(t().promptUpdateOrNew);
 
-      if (answer === "u") {
-        console.log("Opening existing entry for editing...");
+      if (answer === t().promptYes) {
+        spin(t().openingExistingEntry);
         await clickRow(page, match.rowIndex);
         await fillForm(page, entry);
       } else {
-        console.log("Creating new entry...");
+        spin(t().creatingNewEntry);
         await page.locator('vaadin-button[movie-id="mainAction"]').click();
         await waitForVaadin(page);
         await page
@@ -667,7 +821,7 @@ export async function logTime(entry: TimeEntry): Promise<void> {
         await fillForm(page, entry);
       }
     } else {
-      console.log("No existing entry found, creating new...");
+      spin(t().noExistingEntryCreating);
       await page.locator('vaadin-button[movie-id="mainAction"]').click();
       await waitForVaadin(page);
       await page
@@ -676,21 +830,36 @@ export async function logTime(entry: TimeEntry): Promise<void> {
       await fillForm(page, entry);
     }
 
-    // Save — try side panel save button, then fall back to dialog button
-    console.log("Saving...");
-    const saveBtn = page.locator('vaadin-button[movie-id="btnSave"]');
-    const dialogSaveBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
-
-    if (await saveBtn.isVisible().catch(() => false)) {
-      await saveBtn.click();
-    } else if (await dialogSaveBtn.isVisible().catch(() => false)) {
-      await dialogSaveBtn.click();
-    } else {
-      console.log("Save button not found. Entry was NOT saved.");
-      return;
-    }
+    // Blur the active field so Vaadin commits pending values to the server
+    await page.keyboard.press("Tab");
     await waitForVaadin(page);
-    console.log("Gespeichert.");
+
+    if (config.semiManual) {
+      // Semi-manual mode: form is filled, user saves manually
+      stopSpinner();
+      console.log(bold("Form filled. Save manually in the browser, then press Enter here."));
+      await new Promise<void>((resolve) => {
+        process.stdin.once("data", () => resolve());
+      });
+      succeed(success(t().saved));
+    } else {
+      // Save — try side panel save button, then fall back to dialog button
+      spin(t().saving);
+      const saveBtn = page.locator('vaadin-button[movie-id="btnSave"]');
+      const dialogSaveBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
+
+      if (await saveBtn.isVisible().catch(() => false)) {
+        await saveBtn.click();
+      } else if (await dialogSaveBtn.isVisible().catch(() => false)) {
+        await dialogSaveBtn.click();
+      } else {
+        fail(err(t().saveButtonNotFound));
+        return;
+      }
+      await waitForVaadin(page);
+      await page.waitForTimeout(1000);
+      succeed(success(t().saved));
+    }
   } finally {
     await close();
   }
@@ -699,7 +868,7 @@ export async function logTime(entry: TimeEntry): Promise<void> {
 
 /**
  * Delete a time entry matching the given date and project.
- * Opens the side panel and uses the three-dot menu → Löschen.
+ * Opens the side panel and uses the three-dot menu → Delete.
  */
 export async function deleteTime(
   date: string,
@@ -713,17 +882,16 @@ export async function deleteTime(
     await navigateToLeistungen(page);
     await setMonthFilter(page, toMonthYear(date));
 
-    console.log("Reading entries...");
+    spin(t().readingEntries);
     const allEntries = await readGridEntries(page);
     const targetDate = formatDate(date);
     const matches = allEntries.filter(
-      (e) => e.datum === targetDate && e.projekt.includes(project)
+      (e) => e.date === targetDate && e.project.includes(project)
     );
 
     if (matches.length === 0) {
-      console.log(
-        `Kein Eintrag gefunden am ${targetDate} für Projekt ${project}.`
-      );
+      stopSpinner();
+      console.log(info(t().noEntryFound(targetDate, project)));
       return;
     }
 
@@ -731,63 +899,276 @@ export async function deleteTime(
 
     if (matches.length === 1) {
       match = matches[0];
-      console.log(
-        `Gefunden: ${match.anzahl} am ${match.datum} — ${match.projekt}`
-      );
-      console.log(`  Leistungsart: ${match.leistungsart}`);
-      if (match.text) console.log(`  Text: ${match.text}`);
+      stopSpinner();
+      console.log(t().foundEntry(match.hours, match.date, match.project));
+      console.log(`  ${t().serviceTypeLabel}: ${match.serviceType}`);
+      if (match.text) console.log(`  ${t().textLabel}: ${match.text}`);
       console.log("");
 
-      const answer = await promptUser("Wirklich löschen? [j/n] ");
-      if (answer !== "j") {
-        console.log("Abgebrochen.");
+      const answer = await promptUser(t().promptConfirmDelete);
+      if (answer !== confirmDeleteKey()) {
+        console.log(info(t().cancelled));
         return;
       }
     } else {
-      console.log(
-        `${matches.length} Einträge gefunden am ${targetDate} für Projekt ${project}:`
-      );
+      stopSpinner();
+      console.log(t().multipleEntriesFound(matches.length, targetDate, project));
       console.log("");
       for (let i = 0; i < matches.length; i++) {
         const m = matches[i];
         console.log(
-          `  [${i + 1}] ${m.anzahl}  ${m.leistungsart}  ${m.text || "(kein Text)"}`
+          `  [${i + 1}] ${m.hours}  ${m.serviceType}  ${m.text || t().noText}`
         );
       }
       console.log("");
 
-      const answer = await promptUser(
-        `Welchen löschen? [1-${matches.length} / a=alle / n=abbrechen] `
-      );
+      const answer = await promptUser(t().promptWhichDelete(matches.length));
       if (answer === "n") {
-        console.log("Abgebrochen.");
+        console.log(info(t().cancelled));
         return;
       }
       if (answer === "a") {
         // Delete all matches in reverse order (so rowIndex stays valid)
         for (let i = matches.length - 1; i >= 0; i--) {
-          console.log(`Lösche Eintrag ${i + 1}/${matches.length}...`);
+          spin(t().deletingEntry(i + 1, matches.length));
           await clickRow(page, matches[i].rowIndex);
           await deleteSidePanelEntry(page);
         }
-        console.log(`${matches.length} Einträge gelöscht.`);
+        succeed(success(t().entriesDeleted(matches.length)));
         return;
       }
       const idx = parseInt(answer, 10) - 1;
       if (isNaN(idx) || idx < 0 || idx >= matches.length) {
-        console.log("Ungültige Auswahl. Abgebrochen.");
+        console.log(warn(t().invalidSelection));
         return;
       }
       match = matches[idx];
     }
 
     // Open side panel for this entry
+    spin(t().deletingEntry(1, 1));
     await clickRow(page, match.rowIndex);
 
     // Delete via three-dot menu
     await deleteSidePanelEntry(page);
 
-    console.log("Eintrag gelöscht.");
+    succeed(success(t().entryDeleted));
+  } finally {
+    await close();
+  }
+  });
+}
+
+/**
+ * Interactive delete: load all entries for the current month,
+ * let the user pick which ones to delete via checkbox, then delete them.
+ * Returns the entries so the command layer can drive the selection UI.
+ */
+export async function loadMonthEntries(): Promise<{
+  entries: ExistingEntry[];
+  deleteFn: (indices: number[]) => Promise<void>;
+  closeFn: () => Promise<void>;
+}> {
+  const { context, close } = await createAuthenticatedContext();
+  const page = await context.newPage();
+
+  try {
+    await navigateToLeistungen(page);
+    const now = new Date();
+    const monthYear = `${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
+    await setMonthFilter(page, monthYear);
+
+    spin(t().readingEntries);
+    const entries = await readGridEntries(page);
+    stopSpinner();
+
+    const deleteFn = async (indices: number[]) => {
+      // Re-navigate to ensure page is fresh after idle time in the picker
+      await navigateToLeistungen(page);
+      await setMonthFilter(page, monthYear);
+      await waitForVaadin(page);
+
+      // Sort descending so that row indices stay valid as we delete
+      const sorted = [...indices].sort((a, b) => b - a);
+      for (let i = 0; i < sorted.length; i++) {
+        spin(t().deletingEntry(i + 1, sorted.length));
+        await deleteRowViaContextMenu(page, sorted[i]);
+      }
+      succeed(success(t().entriesDeleted(sorted.length)));
+    };
+
+    return { entries, deleteFn, closeFn: close };
+  } catch (e) {
+    await close();
+    throw e;
+  }
+}
+
+/**
+ * Log multiple time entries in a single browser session.
+ * Groups entries by month, checks for duplicates, and creates entries sequentially.
+ */
+export async function batchLogTime(entries: TimeEntry[]): Promise<void> {
+  return withCaptchaRetry(async () => {
+  const { context, close } = await createAuthenticatedContext();
+
+  try {
+    const page = await context.newPage();
+    await navigateToLeistungen(page);
+
+    // Group entries by month
+    const byMonth = new Map<string, TimeEntry[]>();
+    for (const entry of entries) {
+      const key = toMonthYear(entry.date);
+      const list = byMonth.get(key) || [];
+      list.push(entry);
+      byMonth.set(key, list);
+    }
+
+    let created = 0;
+    let skipped = 0;
+    let entryIndex = 0;
+
+    for (const [monthYear, monthEntries] of byMonth) {
+      await setMonthFilter(page, monthYear);
+
+      spin(t().readingExistingEntries);
+      const existing = await readGridEntries(page);
+
+      for (const entry of monthEntries) {
+        entryIndex++;
+        const targetDate = formatDate(entry.date);
+
+        // Check for duplicate (same date + project)
+        const isDuplicate = existing.some(
+          (e) => e.date === targetDate && e.project.includes(entry.project)
+        );
+
+        if (isDuplicate) {
+          stopSpinner();
+          console.log(warn(t().batchSkipping(targetDate, entry.project)));
+          skipped++;
+          continue;
+        }
+
+        spin(t().batchCreating(entryIndex, entries.length, targetDate));
+
+        await page.locator('vaadin-button[movie-id="mainAction"]').click();
+        await waitForVaadin(page);
+        await page
+          .locator('vaadin-combo-box[movie-id="ProjNr2"]')
+          .waitFor({ state: "visible", timeout: 10_000 });
+
+        await fillForm(page, entry);
+
+        // Blur to commit pending values
+        await page.keyboard.press("Tab");
+        await waitForVaadin(page);
+
+        // Save
+        const saveBtn = page.locator('vaadin-button[movie-id="btnSave"]');
+        const dialogSaveBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
+
+        if (await saveBtn.isVisible().catch(() => false)) {
+          await saveBtn.click();
+        } else if (await dialogSaveBtn.isVisible().catch(() => false)) {
+          await dialogSaveBtn.click();
+        } else {
+          fail(err(t().saveButtonNotFound));
+          return;
+        }
+        await waitForVaadin(page);
+        await page.waitForTimeout(1000);
+
+        await closeSidePanelIfOpen(page);
+        created++;
+      }
+    }
+
+    stopSpinner();
+    succeed(success(t().batchSummary(created, skipped)));
+  } finally {
+    await close();
+  }
+  });
+}
+
+/**
+ * Generate a batch template file with missing weekdays pre-filled with defaults.
+ */
+export async function generateBatchFile(
+  from: string,
+  to: string,
+  outPath: string
+): Promise<void> {
+  return withCaptchaRetry(async () => {
+  const { context, close } = await createAuthenticatedContext();
+
+  try {
+    const page = await context.newPage();
+    await navigateToLeistungen(page);
+
+    // Collect existing entries across months in the range
+    const allExisting: ExistingEntry[] = [];
+    const months = new Set<string>();
+    const startDate = new Date(from);
+    const endDate = new Date(to);
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      months.add(toMonthYear(d.toISOString().split("T")[0]));
+    }
+
+    for (const monthYear of months) {
+      await setMonthFilter(page, monthYear);
+      spin(t().readingEntries);
+      const entries = await readGridEntries(page);
+      allExisting.push(...entries);
+    }
+
+    // Find weekdays with no entries
+    const missing: string[] = [];
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue;
+      const dateStr = d.toISOString().split("T")[0];
+      const formatted = formatDate(dateStr);
+      const hasEntry = allExisting.some((e) => e.date === formatted);
+      if (!hasEntry) {
+        missing.push(dateStr);
+      }
+    }
+
+    stopSpinner();
+
+    if (missing.length === 0) {
+      console.log(info(t().batchNoEntries));
+      return;
+    }
+
+    // Pick defaults from the last existing entry
+    let defaultProject = "";
+    let defaultServiceType = "";
+    let defaultHours = 8;
+    let defaultText = "";
+    if (allExisting.length > 0) {
+      const last = allExisting[allExisting.length - 1];
+      defaultProject = last.project.trim();
+      defaultServiceType = last.serviceType.trim();
+      defaultText = last.text.trim();
+      const parsed = parseFloat(last.hours.replace(",", "."));
+      if (!isNaN(parsed)) defaultHours = parsed;
+    }
+
+    const template = missing.map((date) => ({
+      date,
+      project: defaultProject,
+      serviceType: defaultServiceType,
+      hours: defaultHours,
+      text: defaultText,
+    }));
+
+    fs.writeFileSync(outPath, JSON.stringify(template, null, 2) + "\n");
+    succeed(success(t().batchGenerated(outPath, missing.length)));
+    console.log(info(t().batchGenerateHint(outPath)));
   } finally {
     await close();
   }

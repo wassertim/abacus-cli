@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-abacus-cli is a TypeScript CLI tool that automates time entry logging in the Abacus time tracking system (your-abacus-instance.example.com). Abacus uses Vaadin (server-side Java UI framework) with no REST API, so all interaction is done via **Playwright browser automation**.
+abacus-cli is a TypeScript CLI tool that automates time entry logging in Abacus ERP. Abacus uses Vaadin (server-side Java UI framework) with no REST API, so all interaction is done via **Playwright browser automation**. The target instance URL is configured via the `ABACUS_URL` environment variable.
 
-The project language/UI context is **German** (e.g., Leistungsart, Buchungstext, Wochenrapport).
+The project supports **multiple UI languages** (de, en, fr, it, es). Locale is auto-detected from the Abacus page or overridden via `ABACUS_LOCALE` env var. All user-facing strings live in `src/i18n.ts`.
 
 ## Commands
 
@@ -23,7 +23,7 @@ No test framework or linter is configured.
 ```bash
 abacus login                          # Opens browser for manual login, saves session
 abacus discover                       # Captures network requests for API exploration
-abacus time log --project <id> --hours <n> [--leistungsart <id>] [--text <text>] [--date <YYYY-MM-DD>]
+abacus time log --project <id> --hours <n> [--service-type <id>] [--text <text>] [--date <YYYY-MM-DD>]
 ```
 
 ## Architecture
@@ -35,17 +35,15 @@ abacus time log --project <id> --hours <n> [--leistungsart <id>] [--text <text>]
 2. `src/api.ts` — Vaadin browser automation. The key abstraction layer:
    - `waitForVaadin(page)` — Polls `Vaadin.Flow.clients` to ensure no pending server requests before proceeding.
    - `fillCombobox(page, movieId, value)` — Types character-by-character with delays to trigger Vaadin's filter events, then presses Enter to select.
-   - `logTime(entry)` — Full workflow: navigate to page, open dialog, fill form fields, leave browser open for manual review.
+   - `logTime(entry)` — Full workflow: navigate to page, check for duplicates, fill form fields, save automatically.
    - Form fields are identified by Vaadin's `movie-id` attribute (e.g., ProjNr2, LeArtNr, Menge, Text).
-3. `src/config.ts` — Config paths (`~/.abacus-cli/`) and helpers.
-4. `src/commands/time.ts` — The `time log` subcommand with flag parsing.
-5. `src/discover.ts` — Network interceptor that captures XHR/fetch requests for debugging.
+3. `src/i18n.ts` — Multi-language support. Translations for de/en/fr/it/es, locale auto-detection, and `t()` accessor for all UI and CLI strings.
+4. `src/config.ts` — Config paths (`~/.abacus-cli/`) and helpers.
+5. `src/commands/time.ts` — The `time log` subcommand with flag parsing.
+6. `src/discover.ts` — Network interceptor that captures XHR/fetch requests for debugging.
 
 **Key pattern:** Vaadin comboboxes require special handling — char-by-char input with 50ms delays + `waitForVaadin()` between interactions. Direct `.fill()` doesn't trigger Vaadin's server-side filtering.
 
 ## Development Notes
 
-- The `pages/` directory contains large HTML snapshots of Abacus UI pages, used as reference for understanding Vaadin component structure and `movie-id` selectors.
-- `PLAN.md` tracks the current development roadmap (Phase 4: duplicate checking + edit support via the Leistungen page).
-- Browser stays open for 2 minutes after automation for manual review — there is no auto-save.
 - Vaadin grids are virtualized; only visible rows can be read from the DOM.

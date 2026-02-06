@@ -1,4 +1,5 @@
 import fs from "fs";
+import chalk from "chalk";
 import { createAuthenticatedContext } from "./auth";
 import { config, ensureConfigDir } from "./config";
 
@@ -53,9 +54,9 @@ interface DiscoveryEntry {
 export async function discover(): Promise<void> {
   ensureConfigDir();
 
-  console.log("Starting API discovery...");
+  console.log(chalk.bold("Starting API discovery..."));
   console.log("");
-  console.log("Instructions:");
+  console.log(chalk.bold("Instructions:"));
   console.log("1. Navigate to the time entry page (Leistungserfassung)");
   console.log("2. Create a time entry as you normally would");
   console.log("3. All network requests will be captured");
@@ -96,7 +97,7 @@ export async function discover(): Promise<void> {
 
     // Log to console in real-time
     const short = url.length > 100 ? url.substring(0, 100) + "..." : url;
-    console.log(`${request.method()} ${short}`);
+    console.log(chalk.dim(`${request.method()} ${short}`));
   });
 
   page.on("response", (response) => {
@@ -173,10 +174,10 @@ export async function discover(): Promise<void> {
   }
 
   console.log("");
-  console.log(`Captured ${entries.length} requests.`);
-  console.log(`Results saved to ${config.discoveryPath}`);
+  console.log(chalk.green(`Captured ${entries.length} requests.`));
+  console.log(chalk.green(`Results saved to ${config.discoveryPath}`));
   if (credentialEntries.length > 0) {
-    console.log(`Credentials saved separately to ${config.credentialsPath}`);
+    console.log(chalk.green(`Credentials saved separately to ${config.credentialsPath}`));
   }
 
   // Filter for likely API calls (XHR/fetch with POST/PUT/PATCH)
@@ -189,15 +190,15 @@ export async function discover(): Promise<void> {
 
   if (apiCalls.length > 0) {
     console.log("");
-    console.log(`Interesting API calls (POST/PUT/PATCH):`);
+    console.log(chalk.bold("Interesting API calls (POST/PUT/PATCH):"));
     for (const call of apiCalls) {
-      console.log(`  ${call.request.method} ${call.request.url}`);
+      console.log(chalk.cyan(`  ${call.request.method} ${call.request.url}`));
       if (call.request.postData) {
         try {
           const body = JSON.parse(call.request.postData);
-          console.log(`    Body: ${JSON.stringify(body, null, 2).substring(0, 200)}`);
+          console.log(chalk.dim(`    Body: ${JSON.stringify(body, null, 2).substring(0, 200)}`));
         } catch {
-          console.log(`    Body: ${call.request.postData.substring(0, 200)}`);
+          console.log(chalk.dim(`    Body: ${call.request.postData.substring(0, 200)}`));
         }
       }
     }
