@@ -22,7 +22,7 @@ const t = getTranslations(locale);
     <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
     <tbody>
       <tr><td><code>ABACUS_URL</code></td><td><code>https://abacus.example.com/portal/myabacus</code></td><td>Base URL of your Abacus portal</td></tr>
-      <tr><td><code>ABACUS_CONFIG_DIR</code></td><td><code>~/.abacus-cli</code></td><td>Directory for session state and discovery data</td></tr>
+      <tr><td><code>ABACUS_CONFIG_DIR</code></td><td><code>~/.abacus-cli</code></td><td>Directory for session state</td></tr>
       <tr><td><code>ABACUS_LOCALE</code></td><td>auto-detected</td><td>Override the UI locale (de, en, fr, it, es)</td></tr>
     </tbody>
   </table>
@@ -39,8 +39,8 @@ abacus config set locale de                 # Override locale (de, en, fr, it, e
   <p>Create short names for frequently used project numbers and service types.</p>
   <CodeBlock>
     <pre><code>abacus alias list
-abacus alias add project myproj 71100000001
-abacus alias add service-type dev 1435
+abacus alias add project myproj 12345
+abacus alias add service-type dev 100
 abacus alias remove project myproj</code></pre>
   </CodeBlock>
   <p>Once defined, use aliases anywhere instead of numeric IDs:</p>

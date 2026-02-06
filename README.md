@@ -1,8 +1,10 @@
 # abacus-cli
 
-CLI tool for automating time entry logging in [Abacus ERP](https://www.abacus.ch) via Playwright browser automation.
+CLI tool for logging time entries in [Abacus ERP](https://www.abacus.ch) from the terminal.
 
-[Abacus](https://www.abacus.ch) is a Swiss ERP system widely used by companies in Switzerland for accounting, payroll, and time tracking. Its web portal is built on Vaadin (a server-side Java UI framework) and does not expose a REST API — so this tool uses headless browser automation instead. The CLI drives a real Chromium browser, fills forms, reads grids, and handles Vaadin's async server round-trips.
+[Abacus](https://www.abacus.ch) is a Swiss ERP system widely used for accounting, payroll, and time tracking. Its web portal does not expose a REST API, so this tool uses Playwright to drive a headless Chromium browser — filling forms, reading grids, and handling the UI automatically.
+
+**[Documentation](https://wassertim.github.io/abacus-cli/en/)**
 
 ## Who is this for?
 
@@ -13,32 +15,31 @@ This project is open source under the MIT license. You're welcome to fork it, ad
 ## Prerequisites
 
 - Node.js 18+
-- A running Abacus instance you have credentials for
+- Access to an Abacus web portal (provided by your company)
 
 ## Setup
+
+```bash
+npm install -g abacus-cli
+```
+
+Chromium is downloaded automatically on install for browser automation.
+
+### From source
 
 ```bash
 git clone https://github.com/wassertim/abacus-cli.git
 cd abacus-cli
 npm install
 npm run build
-npm link          # makes `abacus` available globally
+npm link
 ```
 
-### Configuration
-
-Set your Abacus instance URL via environment variable:
+### Configure your Abacus URL
 
 ```bash
-export ABACUS_URL="https://your-abacus-instance.example.com/portal/myabacus"
+abacus config set url https://your-abacus-instance.example.com/portal/myabacus
 ```
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ABACUS_URL` | `https://abacus.example.com/portal/myabacus` | Base URL of your Abacus portal |
-| `ABACUS_CONFIG_DIR` | `~/.abacus-cli` | Directory for session state and discovery data |
-
-## Usage
 
 ### Login
 
@@ -48,17 +49,19 @@ Opens a real browser window for manual login. Session cookies are persisted loca
 abacus login
 ```
 
+## Usage
+
 ### Log time
 
 ```bash
-abacus time log --project 71100000001 --hours 8 --service-type 1435 --text "Development" --date 2025-01-15
+abacus time log --project 12345 --hours 8 --service-type 100 --text "Development" --date 2025-01-15
 ```
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
 | `--project <id>` | no | — | Project number or alias (interactive prompt if omitted) |
 | `--hours <n>` | yes | — | Hours to log |
-| `--service-type <id>` | no | `1435` | Service type ID or alias |
+| `--service-type <id>` | no | `100` | Service type ID or alias |
 | `--text <text>` | yes | — | Description |
 | `--date <YYYY-MM-DD>` | no | today | Entry date |
 
@@ -87,13 +90,13 @@ Create multiple time entries in a single browser session — much faster than ru
 
 ```bash
 # Fill current week (Mon-Fri)
-abacus time batch --project 71100000001 --hours 8 --service-type 1435 --text "Development"
+abacus time batch --project 12345 --hours 8 --service-type 100 --text "Development"
 
 # Fill specific date range
-abacus time batch --from 2026-01-26 --to 2026-01-30 --project 71100000001 --hours 8 --text "Dev"
+abacus time batch --from 2026-01-26 --to 2026-01-30 --project 12345 --hours 8 --text "Dev"
 
 # Preview what would be created
-abacus time batch --project 71100000001 --hours 8 --text "Dev" --dry-run
+abacus time batch --project 12345 --hours 8 --text "Dev" --dry-run
 ```
 
 **Generate template** — finds missing days and writes a pre-filled file:
@@ -116,21 +119,21 @@ abacus time batch --file entries.json --include-weekends
 JSON format:
 ```json
 [
-  { "date": "2026-02-02", "project": "71100000001", "serviceType": "1435", "hours": 8, "text": "Development" }
+  { "date": "2026-02-02", "project": "12345", "serviceType": "100", "hours": 8, "text": "Development" }
 ]
 ```
 
 CSV format:
 ```
 date,project,serviceType,hours,text
-2026-02-02,71100000001,1435,8,Development
+2026-02-02,12345,100,8,Development
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--project <id>` | Project number or alias (required for range fill) |
 | `--hours <n>` | Hours per entry (required for range fill) |
-| `--service-type <id>` | Service type (default: 1435) |
+| `--service-type <id>` | Service type (default: 100) |
 | `--text <text>` | Description |
 | `--from <YYYY-MM-DD>` | Start date (default: Monday of current week) |
 | `--to <YYYY-MM-DD>` | End date (default: Friday of current week) |
@@ -155,7 +158,7 @@ This opens a checkbox picker with all entries for the current month. Navigate wi
 **Targeted mode** — delete a specific entry by date and project:
 
 ```bash
-abacus time delete --date 2025-01-15 --project 71100000001
+abacus time delete --date 2025-01-15 --project 12345
 ```
 
 | Flag | Required | Description |
@@ -201,8 +204,8 @@ Create short names for frequently used project numbers and service types.
 
 ```bash
 abacus alias list
-abacus alias add project myproj 71100000001
-abacus alias add service-type dev 1435
+abacus alias add project myproj 12345
+abacus alias add service-type dev 100
 abacus alias remove project myproj
 ```
 
@@ -219,6 +222,13 @@ abacus config show                          # Show current config and sources
 abacus config set url https://your-instance.example.com/portal/myabacus
 abacus config set locale de                 # Override locale (de, en, fr, it, es)
 ```
+
+Environment variables can also be used:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ABACUS_URL` | — | Base URL of your Abacus portal |
+| `ABACUS_CONFIG_DIR` | `~/.abacus-cli` | Directory for session state |
 
 ### Session refresh
 
@@ -241,11 +251,13 @@ abacus discover
 
 ## How it works
 
+Abacus's web portal is built on [Vaadin](https://vaadin.com/), a server-side Java UI framework. There is no REST API — every interaction happens through the browser DOM with server round-trips for each action.
+
 1. **Login** — Opens a headed browser for manual SSO/login. Saves cookies and localStorage to `~/.abacus-cli/state.json`.
-2. **Automation** — Restores the saved session in a headless browser. Navigates to the Leistungen (time entries) page via Vaadin's menu system.
+2. **Automation** — Restores the saved session in a headless browser and navigates through Vaadin's menu system to the time entries page.
 3. **Vaadin handling** — Comboboxes require character-by-character input with delays to trigger server-side filtering. `waitForVaadin()` polls the client to ensure no pending server requests before proceeding.
 4. **Duplicate detection** — Before creating an entry, existing entries for the same date and project are checked. You can choose to update or create new.
-5. **Captcha fallback** — If a FortiADC captcha is detected, the browser reopens in headed mode for manual solving, then retries automatically.
+5. **Captcha fallback** — If a captcha is detected, the browser reopens in headed mode for manual solving, then retries automatically.
 
 ## Development
 

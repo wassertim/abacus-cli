@@ -32,10 +32,10 @@ export default {
     },
     howItWorks: {
       title: 'How it works',
-      step1: 'Login — Opens a real browser for manual SSO/login. Session is saved locally.',
-      step2: 'Automation — Restores the session headlessly and navigates Vaadin\'s UI.',
-      step3: 'Smart handling — Character-by-character combobox input, server round-trip polling, duplicate detection.',
-      step4: 'Captcha fallback — If a captcha appears, the browser reopens for manual solving, then retries.',
+      step1: 'Log in once in a real browser window. Your session is saved locally.',
+      step2: 'Run any command — it opens a headless browser, restores your session, and does the work.',
+      step3: 'Existing entries are detected automatically so you don\'t create duplicates.',
+      step4: 'If your company uses a captcha, the browser reopens so you can solve it, then continues.',
     },
   },
   gettingStarted: {

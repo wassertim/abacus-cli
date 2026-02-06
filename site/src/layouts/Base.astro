@@ -31,17 +31,19 @@ const alternateUrl = `https://wassertim.github.io${localePath(other, pagePath)}`
     <link rel="canonical" href={canonicalUrl} />
     <link rel="alternate" hreflang={locale} href={canonicalUrl} />
     <link rel="alternate" hreflang={other} href={alternateUrl} />
+    <link rel="alternate" hreflang="x-default" href={canonicalUrl} />
 
+    <meta property="og:locale" content={locale === 'de' ? 'de_DE' : 'en_US'} />
     <meta property="og:type" content="website" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalUrl} />
-    <meta property="og:image" content="https://wassertim.github.io/abacus-cli/og-image.svg" />
+    <meta property="og:image" content="https://wassertim.github.io/abacus-cli/og-image.png" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content="https://wassertim.github.io/abacus-cli/og-image.svg" />
+    <meta name="twitter:image" content="https://wassertim.github.io/abacus-cli/og-image.png" />
 
     <link rel="icon" type="image/svg+xml" href="/abacus-cli/favicon.svg" />
   </head>

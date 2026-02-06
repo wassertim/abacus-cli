@@ -32,10 +32,10 @@ export default {
     },
     howItWorks: {
       title: 'So funktioniert es',
-      step1: 'Login — Öffnet einen echten Browser für manuelles SSO/Login. Die Session wird lokal gespeichert.',
-      step2: 'Automatisierung — Stellt die Session headless wieder her und navigiert durch Vaadins UI.',
-      step3: 'Smarte Eingabe — Zeichen-für-Zeichen Combobox-Eingabe, Server-Roundtrip-Polling, Duplikaterkennung.',
-      step4: 'Captcha-Fallback — Falls ein Captcha erscheint, öffnet sich der Browser zur manuellen Lösung und versucht es dann erneut.',
+      step1: 'Einmal im echten Browser einloggen. Ihre Session wird lokal gespeichert.',
+      step2: 'Beliebigen Befehl ausführen — ein unsichtbarer Browser öffnet sich, stellt Ihre Session wieder her und erledigt die Arbeit.',
+      step3: 'Bestehende Einträge werden automatisch erkannt, damit keine Duplikate entstehen.',
+      step4: 'Falls Ihr Unternehmen ein Captcha nutzt, öffnet sich der Browser zur manuellen Lösung und fährt dann fort.',
     },
   },
   gettingStarted: {

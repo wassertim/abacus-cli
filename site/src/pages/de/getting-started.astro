@@ -19,17 +19,14 @@ const t = getTranslations(locale);
   <h2 id="prerequisites">{t.gettingStarted.prerequisites}</h2>
   <ul>
     <li>Node.js 18+</li>
-    <li>Eine laufende Abacus-Instanz, für die Sie Zugangsdaten haben</li>
+    <li>Zugang zu einem Abacus-Webportal (von Ihrem Unternehmen bereitgestellt)</li>
   </ul>
 
   <h2 id="installation">{t.gettingStarted.installation}</h2>
   <CodeBlock title="Terminal">
-    <pre><code>git clone https://github.com/wassertim/abacus-cli.git
-cd abacus-cli
-npm install
-npm run build
-npm link          # macht `abacus` global verfügbar</code></pre>
+    <pre><code>npm install -g abacus-cli</code></pre>
   </CodeBlock>
+  <p>Chromium wird bei der Installation automatisch heruntergeladen.</p>
 
   <h2 id="configuration">{t.gettingStarted.configuration}</h2>
   <p>Setzen Sie die URL Ihrer Abacus-Instanz als Umgebungsvariable:</p>
@@ -58,7 +55,7 @@ npm link          # macht `abacus` global verfügbar</code></pre>
       <tr>
         <td><code>ABACUS_CONFIG_DIR</code></td>
         <td><code>~/.abacus-cli</code></td>
-        <td>Verzeichnis für Session-Daten und Discovery-Dateien</td>
+        <td>Verzeichnis für Session-Daten</td>
       </tr>
     </tbody>
   </table>
@@ -71,7 +68,7 @@ npm link          # macht `abacus` global verfügbar</code></pre>
 
   <h2 id="first-entry">{t.gettingStarted.firstEntry}</h2>
   <CodeBlock>
-    <pre><code>abacus time log --project 71100000001 --hours 8 --service-type 1435 --text "Entwicklung"</code></pre>
+    <pre><code>abacus time log --project 12345 --hours 8 --service-type 100 --text "Entwicklung"</code></pre>
   </CodeBlock>
   <p>Falls ein passender Eintrag (gleiches Datum + Projekt) bereits existiert, werden Sie gefragt, ob Sie ihn aktualisieren oder einen neuen erstellen möchten.</p>
 

@@ -40,7 +40,7 @@ export function registerAliasCommands(program: Command): void {
 
   alias
     .command("add")
-    .description("Add an alias (e.g. abacus alias add project da_dev 71100000001)")
+    .description("Add an alias (e.g. abacus alias add project da_dev 12345)")
     .argument("<type>", "project or service-type")
     .argument("<alias>", "Short name")
     .argument("<id>", "Actual ID/number")

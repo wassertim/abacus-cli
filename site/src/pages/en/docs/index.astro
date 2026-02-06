@@ -25,14 +25,14 @@ const t = getTranslations(locale);
   <h2 id="time-log">abacus time log</h2>
   <p>Log a single time entry.</p>
   <CodeBlock>
-    <pre><code>abacus time log --project 71100000001 --hours 8 --service-type 1435 --text "Development" --date 2025-01-15</code></pre>
+    <pre><code>abacus time log --project 12345 --hours 8 --service-type 100 --text "Development" --date 2025-01-15</code></pre>
   </CodeBlock>
   <table>
     <thead><tr><th>Flag</th><th>Required</th><th>Default</th><th>Description</th></tr></thead>
     <tbody>
       <tr><td><code>--project &lt;id&gt;</code></td><td>no</td><td>—</td><td>Project number or alias (interactive prompt if omitted)</td></tr>
       <tr><td><code>--hours &lt;n&gt;</code></td><td>yes</td><td>—</td><td>Hours to log</td></tr>
-      <tr><td><code>--service-type &lt;id&gt;</code></td><td>no</td><td><code>1435</code></td><td>Service type ID or alias</td></tr>
+      <tr><td><code>--service-type &lt;id&gt;</code></td><td>no</td><td><code>100</code></td><td>Service type ID or alias</td></tr>
       <tr><td><code>--text &lt;text&gt;</code></td><td>yes</td><td>—</td><td>Description</td></tr>
       <tr><td><code>--date &lt;YYYY-MM-DD&gt;</code></td><td>no</td><td>today</td><td>Entry date</td></tr>
     </tbody>
@@ -58,13 +58,13 @@ abacus time list --monthYear 01.2025  # specific month</code></pre>
   <p>Fills all weekdays in a date range:</p>
   <CodeBlock>
     <pre><code># Fill current week (Mon-Fri)
-abacus time batch --project 71100000001 --hours 8 --service-type 1435 --text "Development"
+abacus time batch --project 12345 --hours 8 --service-type 100 --text "Development"
 
 # Fill specific date range
-abacus time batch --from 2026-01-26 --to 2026-01-30 --project 71100000001 --hours 8 --text "Dev"
+abacus time batch --from 2026-01-26 --to 2026-01-30 --project 12345 --hours 8 --text "Dev"
 
 # Preview what would be created
-abacus time batch --project 71100000001 --hours 8 --text "Dev" --dry-run</code></pre>
+abacus time batch --project 12345 --hours 8 --text "Dev" --dry-run</code></pre>
   </CodeBlock>
 
   <h3>Generate template</h3>
@@ -89,7 +89,7 @@ abacus time batch --file entries.json --include-weekends</code></pre>
     <tbody>
       <tr><td><code>--project &lt;id&gt;</code></td><td>Project number or alias (required for range fill)</td></tr>
       <tr><td><code>--hours &lt;n&gt;</code></td><td>Hours per entry (required for range fill)</td></tr>
-      <tr><td><code>--service-type &lt;id&gt;</code></td><td>Service type (default: 1435)</td></tr>
+      <tr><td><code>--service-type &lt;id&gt;</code></td><td>Service type (default: 100)</td></tr>
       <tr><td><code>--text &lt;text&gt;</code></td><td>Description</td></tr>
       <tr><td><code>--from &lt;YYYY-MM-DD&gt;</code></td><td>Start date (default: Monday of current week)</td></tr>
       <tr><td><code>--to &lt;YYYY-MM-DD&gt;</code></td><td>End date (default: Friday of current week)</td></tr>
@@ -110,7 +110,7 @@ abacus time batch --file entries.json --include-weekends</code></pre>
 
   <p><strong>Targeted mode</strong> — delete a specific entry by date and project:</p>
   <CodeBlock>
-    <pre><code>abacus time delete --date 2025-01-15 --project 71100000001</code></pre>
+    <pre><code>abacus time delete --date 2025-01-15 --project 12345</code></pre>
   </CodeBlock>
 
   <h2 id="summary">abacus summary</h2>
@@ -132,9 +132,4 @@ Overtime: +12.5h (1.6d) · Vacation: 15.0d left
     <pre><code>abacus check 2>/dev/null</code></pre>
   </CodeBlock>
 
-  <h2 id="discover">abacus discover</h2>
-  <p>Captures network requests while you interact with Abacus manually. Useful for understanding Vaadin's communication protocol.</p>
-  <CodeBlock>
-    <pre><code>abacus discover</code></pre>
-  </CodeBlock>
 </Docs>
