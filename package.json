@@ -20,11 +20,15 @@
     "vaadin",
     "automation"
   ],
+  "files": [
+    "dist"
+  ],
   "main": "dist/index.js",
   "bin": {
     "abacus": "dist/index.js"
   },
   "scripts": {
+    "postinstall": "npx rebrowser-playwright-core install chromium",
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "start": "node dist/index.js"

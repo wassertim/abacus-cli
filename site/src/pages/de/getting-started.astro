@@ -1,0 +1,86 @@
+---
+import Docs from '../../layouts/Docs.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import { getTranslations } from '../../i18n';
+
+const locale = 'de' as const;
+const t = getTranslations(locale);
+---
+
+<Docs
+  title="Erste Schritte — abacus-cli"
+  description={t.meta.gettingStartedDescription}
+  locale={locale}
+  pagePath="/getting-started"
+>
+  <h1>{t.gettingStarted.title}</h1>
+  <p>{t.gettingStarted.description}</p>
+
+  <h2 id="prerequisites">{t.gettingStarted.prerequisites}</h2>
+  <ul>
+    <li>Node.js 18+</li>
+    <li>Eine laufende Abacus-Instanz, für die Sie Zugangsdaten haben</li>
+  </ul>
+
+  <h2 id="installation">{t.gettingStarted.installation}</h2>
+  <CodeBlock title="Terminal">
+    <pre><code>git clone https://github.com/wassertim/abacus-cli.git
+cd abacus-cli
+npm install
+npm run build
+npm link          # macht `abacus` global verfügbar</code></pre>
+  </CodeBlock>
+
+  <h2 id="configuration">{t.gettingStarted.configuration}</h2>
+  <p>Setzen Sie die URL Ihrer Abacus-Instanz als Umgebungsvariable:</p>
+  <CodeBlock>
+    <pre><code>export ABACUS_URL="https://ihre-abacus-instanz.example.com/portal/myabacus"</code></pre>
+  </CodeBlock>
+  <p>Oder verwenden Sie den Config-Befehl:</p>
+  <CodeBlock>
+    <pre><code>abacus config set url https://ihre-abacus-instanz.example.com/portal/myabacus</code></pre>
+  </CodeBlock>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>Standard</th>
+        <th>Beschreibung</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>ABACUS_URL</code></td>
+        <td><code>https://abacus.example.com/portal/myabacus</code></td>
+        <td>Basis-URL Ihres Abacus-Portals</td>
+      </tr>
+      <tr>
+        <td><code>ABACUS_CONFIG_DIR</code></td>
+        <td><code>~/.abacus-cli</code></td>
+        <td>Verzeichnis für Session-Daten und Discovery-Dateien</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 id="first-login">{t.gettingStarted.firstLogin}</h2>
+  <p>Öffnet ein echtes Browserfenster für manuelles Login. Session-Cookies werden lokal gespeichert, sodass nachfolgende Befehle headless laufen.</p>
+  <CodeBlock>
+    <pre><code>abacus login</code></pre>
+  </CodeBlock>
+
+  <h2 id="first-entry">{t.gettingStarted.firstEntry}</h2>
+  <CodeBlock>
+    <pre><code>abacus time log --project 71100000001 --hours 8 --service-type 1435 --text "Entwicklung"</code></pre>
+  </CodeBlock>
+  <p>Falls ein passender Eintrag (gleiches Datum + Projekt) bereits existiert, werden Sie gefragt, ob Sie ihn aktualisieren oder einen neuen erstellen möchten.</p>
+
+  <h2 id="check-status">{t.gettingStarted.checkStatus}</h2>
+  <p>Kompakte Wochenübersicht anzeigen:</p>
+  <CodeBlock>
+    <pre><code>abacus summary</code></pre>
+  </CodeBlock>
+  <pre><code>Week 06 · 32.5 / 40h · 7.5h remaining · Wed, Thu missing
+Overtime: +12.5h (1.6d) · Vacation: 15.0d left
+(updated 2h ago)</code></pre>
+</Docs>

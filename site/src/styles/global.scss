@@ -1,0 +1,220 @@
+// ── Palette presets ──────────────────────────────────────────────────
+$palettes: (
+  warm-amber:      (primary: (224, 145,  69), accent: #64b5a0),
+  teal-sandstone:  (primary: ( 42, 168, 154), accent: #d4a373),
+  rust-sage:       (primary: (196,  93,  62), accent: #7c9a82),
+  steel-copper:    (primary: ( 74, 124, 150), accent: #c48f65),
+  navy-marigold:   (primary: ( 56,  88, 152), accent: #e0a832),
+  forest-cream:    (primary: ( 58, 120,  82), accent: #c9b99a),
+  burgundy-gold:   (primary: (148,  52,  68), accent: #c9a84c),
+  espresso-caramel:(primary: (138,  90,  58), accent: #b8966c),
+  pine-coral:      (primary: ( 52, 108,  96), accent: #d4836a),
+  slate-peach:     (primary: ( 88,  98, 116), accent: #d9967a),
+);
+
+// ── Change this to switch palette ───────────────────────────────────
+$palette: rust-sage;
+
+// ── Resolve active palette ──────────────────────────────────────────
+$active: map-get($palettes, $palette);
+$primary-rgb: map-get($active, primary);
+$accent: map-get($active, accent);
+$primary-r: nth($primary-rgb, 1);
+$primary-g: nth($primary-rgb, 2);
+$primary-b: nth($primary-rgb, 3);
+
+:root {
+  --color-bg: #0a0a0b;
+  --color-surface: #141416;
+  --color-surface-raised: #1c1c1f;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-text: #ededef;
+  --color-text-muted: #8b8b8d;
+  --color-primary-rgb: #{$primary-r}, #{$primary-g}, #{$primary-b};
+  --color-primary: rgb(var(--color-primary-rgb));
+  --color-primary-hover: color-mix(in srgb, var(--color-primary), white 25%);
+  --color-primary-light: rgba(var(--color-primary-rgb), 0.1);
+  --color-accent: #{$accent};
+  --color-code-bg: #141416;
+  --color-code-text: #e2e8f0;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', Menlo, monospace;
+
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --max-width: 72rem;
+  --sidebar-width: 14rem;
+}
+
+/* Light theme — ready for future toggle */
+[data-theme="light"] {
+  --color-bg: #ffffff;
+  --color-surface: #f8f9fa;
+  --color-surface-raised: #f0f1f3;
+  --color-border: #e2e8f0;
+  --color-text: #1a202c;
+  --color-text-muted: #64748b;
+  --color-primary-rgb: #{darken(rgb($primary-r, $primary-g, $primary-b), 8%)};
+  --color-primary: rgb(var(--color-primary-rgb));
+  --color-primary-hover: color-mix(in srgb, var(--color-primary), black 15%);
+  --color-primary-light: rgba(var(--color-primary-rgb), 0.08);
+  --color-accent: #{darken($accent, 8%)};
+  --color-code-bg: #1e293b;
+  --color-code-text: #e2e8f0;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-bg);
+  color-scheme: dark;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+  text-decoration-color: rgba(var(--color-primary-rgb), 0.4);
+  text-underline-offset: 3px;
+}
+
+h1, h2, h3, h4 {
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+h1 { font-size: 2.5rem; }
+h2 { font-size: 1.75rem; }
+h3 { font-size: 1.25rem; }
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-surface-raised);
+  padding: 0.15em 0.4em;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+pre {
+  background: var(--color-surface);
+  color: var(--color-code-text);
+  padding: var(--space-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  border: none;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th, td {
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+th {
+  font-weight: 600;
+  background: var(--color-surface);
+}
+
+main {
+  flex: 1;
+}
+
+.container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--space-lg);
+}
+
+.prose {
+  max-width: 48rem;
+}
+
+.prose h2 {
+  margin-top: var(--space-3xl);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
+}
+
+.prose h3 {
+  margin-top: var(--space-xl);
+  margin-bottom: var(--space-sm);
+}
+
+.prose p {
+  margin-bottom: var(--space-md);
+}
+
+.prose ul, .prose ol {
+  margin-bottom: var(--space-md);
+  padding-left: var(--space-xl);
+}
+
+.prose li {
+  margin-bottom: var(--space-xs);
+}
+
+.prose pre {
+  margin-bottom: var(--space-lg);
+}
+
+.prose table {
+  margin-bottom: var(--space-lg);
+}
+
+@media (max-width: 768px) {
+  h1 { font-size: 1.75rem; }
+  h2 { font-size: 1.5rem; }
+
+  .container {
+    padding: 0 var(--space-md);
+  }
+}

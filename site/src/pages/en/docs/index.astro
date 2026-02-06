@@ -1,0 +1,140 @@
+---
+import Docs from '../../../layouts/Docs.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import { getTranslations } from '../../../i18n';
+
+const locale = 'en' as const;
+const t = getTranslations(locale);
+---
+
+<Docs
+  title="Commands Reference — abacus-cli"
+  description={t.meta.docsDescription}
+  locale={locale}
+  pagePath="/docs/"
+>
+  <h1>{t.docs.title}</h1>
+  <p>{t.docs.description}</p>
+
+  <h2 id="login">abacus login</h2>
+  <p>Opens a real browser window for manual login. Session cookies are persisted locally so subsequent commands run headlessly.</p>
+  <CodeBlock>
+    <pre><code>abacus login</code></pre>
+  </CodeBlock>
+
+  <h2 id="time-log">abacus time log</h2>
+  <p>Log a single time entry.</p>
+  <CodeBlock>
+    <pre><code>abacus time log --project 71100000001 --hours 8 --service-type 1435 --text "Development" --date 2025-01-15</code></pre>
+  </CodeBlock>
+  <table>
+    <thead><tr><th>Flag</th><th>Required</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>--project &lt;id&gt;</code></td><td>no</td><td>—</td><td>Project number or alias (interactive prompt if omitted)</td></tr>
+      <tr><td><code>--hours &lt;n&gt;</code></td><td>yes</td><td>—</td><td>Hours to log</td></tr>
+      <tr><td><code>--service-type &lt;id&gt;</code></td><td>no</td><td><code>1435</code></td><td>Service type ID or alias</td></tr>
+      <tr><td><code>--text &lt;text&gt;</code></td><td>yes</td><td>—</td><td>Description</td></tr>
+      <tr><td><code>--date &lt;YYYY-MM-DD&gt;</code></td><td>no</td><td>today</td><td>Entry date</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="time-list">abacus time list</h2>
+  <p>List time entries for a given month.</p>
+  <CodeBlock>
+    <pre><code>abacus time list                      # current month
+abacus time list --monthYear 01.2025  # specific month</code></pre>
+  </CodeBlock>
+
+  <h2 id="time-status">abacus time status</h2>
+  <p>Shows the weekly summary for the week containing the given date — hours logged, remaining hours, missing days, overtime, and vacation balance.</p>
+  <CodeBlock>
+    <pre><code>abacus time status --date 2025-01-15</code></pre>
+  </CodeBlock>
+
+  <h2 id="time-batch">abacus time batch</h2>
+  <p>Create multiple time entries in a single browser session.</p>
+
+  <h3>Range fill (default)</h3>
+  <p>Fills all weekdays in a date range:</p>
+  <CodeBlock>
+    <pre><code># Fill current week (Mon-Fri)
+abacus time batch --project 71100000001 --hours 8 --service-type 1435 --text "Development"
+
+# Fill specific date range
+abacus time batch --from 2026-01-26 --to 2026-01-30 --project 71100000001 --hours 8 --text "Dev"
+
+# Preview what would be created
+abacus time batch --project 71100000001 --hours 8 --text "Dev" --dry-run</code></pre>
+  </CodeBlock>
+
+  <h3>Generate template</h3>
+  <p>Finds missing days and writes a pre-filled file:</p>
+  <CodeBlock>
+    <pre><code>abacus time batch --generate
+abacus time batch --generate --from 2026-01-26 --to 2026-01-30 --out entries.json
+# Edit the file, then import it
+abacus time batch --file entries.json</code></pre>
+  </CodeBlock>
+
+  <h3>File import</h3>
+  <p>Create entries from a JSON or CSV file:</p>
+  <CodeBlock>
+    <pre><code>abacus time batch --file entries.json
+abacus time batch --file entries.csv
+abacus time batch --file entries.json --include-weekends</code></pre>
+  </CodeBlock>
+
+  <table>
+    <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>--project &lt;id&gt;</code></td><td>Project number or alias (required for range fill)</td></tr>
+      <tr><td><code>--hours &lt;n&gt;</code></td><td>Hours per entry (required for range fill)</td></tr>
+      <tr><td><code>--service-type &lt;id&gt;</code></td><td>Service type (default: 1435)</td></tr>
+      <tr><td><code>--text &lt;text&gt;</code></td><td>Description</td></tr>
+      <tr><td><code>--from &lt;YYYY-MM-DD&gt;</code></td><td>Start date (default: Monday of current week)</td></tr>
+      <tr><td><code>--to &lt;YYYY-MM-DD&gt;</code></td><td>End date (default: Friday of current week)</td></tr>
+      <tr><td><code>--file &lt;path&gt;</code></td><td>Import from JSON or CSV file</td></tr>
+      <tr><td><code>--generate</code></td><td>Generate template file with missing days</td></tr>
+      <tr><td><code>--out &lt;path&gt;</code></td><td>Output path for --generate (default: batch.json)</td></tr>
+      <tr><td><code>--dry-run</code></td><td>Preview entries without creating them</td></tr>
+      <tr><td><code>--include-weekends</code></td><td>Allow weekend dates from file import</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="time-delete">abacus time delete</h2>
+  <p><strong>Interactive mode</strong> — run without flags to select entries from the current month:</p>
+  <CodeBlock>
+    <pre><code>abacus time delete</code></pre>
+  </CodeBlock>
+  <p>Opens a checkbox picker with all entries for the current month. Navigate with arrow keys, toggle with space, <code>a</code> to select all, enter to confirm.</p>
+
+  <p><strong>Targeted mode</strong> — delete a specific entry by date and project:</p>
+  <CodeBlock>
+    <pre><code>abacus time delete --date 2025-01-15 --project 71100000001</code></pre>
+  </CodeBlock>
+
+  <h2 id="summary">abacus summary</h2>
+  <p>Prints a compact one-line weekly status. Reads from a local cache — if the cache is missing or stale, it auto-fetches fresh data.</p>
+  <CodeBlock>
+    <pre><code>abacus summary</code></pre>
+  </CodeBlock>
+  <pre><code>Week 06 · 32.5 / 40h · 7.5h remaining · Wed, Thu missing
+Overtime: +12.5h (1.6d) · Vacation: 15.0d left
+(updated 2h ago)</code></pre>
+
+  <h2 id="check">abacus check</h2>
+  <p>Silent check designed for <code>.zshrc</code>. Prints a warning only when there are missing days this week.</p>
+  <CodeBlock>
+    <pre><code>abacus check</code></pre>
+  </CodeBlock>
+  <p>Add to your shell profile:</p>
+  <CodeBlock>
+    <pre><code>abacus check 2>/dev/null</code></pre>
+  </CodeBlock>
+
+  <h2 id="discover">abacus discover</h2>
+  <p>Captures network requests while you interact with Abacus manually. Useful for understanding Vaadin's communication protocol.</p>
+  <CodeBlock>
+    <pre><code>abacus discover</code></pre>
+  </CodeBlock>
+</Docs>

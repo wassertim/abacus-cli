@@ -1,0 +1,108 @@
+---
+import Base from '../../layouts/Base.astro';
+import Hero from '../../components/Hero.astro';
+import FeatureCard from '../../components/FeatureCard.astro';
+import { getTranslations } from '../../i18n';
+
+const locale = 'en' as const;
+const t = getTranslations(locale);
+
+const icons = {
+  batch: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>',
+  summary: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></svg>',
+  terminal: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>',
+  languages: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>',
+};
+---
+
+<Base
+  title="abacus-cli — Automate Abacus ERP Time Entries"
+  description={t.meta.homeDescription}
+  locale={locale}
+  pagePath="/"
+>
+  <Hero locale={locale} />
+
+  <section class="features">
+    <div class="features-inner container">
+      <div class="features-grid">
+        <FeatureCard icon={icons.batch} title={t.home.features.batch.title} description={t.home.features.batch.description} />
+        <FeatureCard icon={icons.summary} title={t.home.features.summary.title} description={t.home.features.summary.description} />
+        <FeatureCard icon={icons.terminal} title={t.home.features.shell.title} description={t.home.features.shell.description} />
+        <FeatureCard icon={icons.languages} title={t.home.features.i18n.title} description={t.home.features.i18n.description} />
+      </div>
+    </div>
+  </section>
+
+  <section class="how-it-works">
+    <div class="container">
+      <h2>{t.home.howItWorks.title}</h2>
+      <ol class="steps">
+        <li>{t.home.howItWorks.step1}</li>
+        <li>{t.home.howItWorks.step2}</li>
+        <li>{t.home.howItWorks.step3}</li>
+        <li>{t.home.howItWorks.step4}</li>
+      </ol>
+    </div>
+  </section>
+
+  <Fragment slot="default">
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "abacus-cli",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "macOS, Linux, Windows",
+      "description": "CLI tool for automating time entry logging in Abacus ERP via Playwright browser automation.",
+      "url": "https://wassertim.github.io/abacus-cli/en/",
+      "license": "https://opensource.org/licenses/MIT",
+      "author": {
+        "@type": "Person",
+        "name": "Tim Petri"
+      },
+      "codeRepository": "https://github.com/wassertim/abacus-cli"
+    })} />
+  </Fragment>
+</Base>
+
+<style>
+  .features {
+    padding: var(--space-2xl) 0 var(--space-3xl);
+    background: var(--color-bg);
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: var(--space-lg);
+    max-width: 56rem;
+    margin: 0 auto;
+  }
+
+  .how-it-works {
+    padding: var(--space-3xl) 0;
+    max-width: 42rem;
+    margin: 0 auto;
+  }
+
+  .how-it-works h2 {
+    margin-bottom: var(--space-lg);
+  }
+
+  .steps {
+    padding-left: var(--space-xl);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  .steps li {
+    line-height: 1.6;
+    color: var(--color-text-muted);
+  }
+
+  .steps li::marker {
+    color: var(--color-primary);
+    font-weight: 700;
+  }
+</style>

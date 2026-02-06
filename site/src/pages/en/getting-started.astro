@@ -1,0 +1,86 @@
+---
+import Docs from '../../layouts/Docs.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import { getTranslations } from '../../i18n';
+
+const locale = 'en' as const;
+const t = getTranslations(locale);
+---
+
+<Docs
+  title="Getting Started — abacus-cli"
+  description={t.meta.gettingStartedDescription}
+  locale={locale}
+  pagePath="/getting-started"
+>
+  <h1>{t.gettingStarted.title}</h1>
+  <p>{t.gettingStarted.description}</p>
+
+  <h2 id="prerequisites">{t.gettingStarted.prerequisites}</h2>
+  <ul>
+    <li>Node.js 18+</li>
+    <li>A running Abacus instance you have credentials for</li>
+  </ul>
+
+  <h2 id="installation">{t.gettingStarted.installation}</h2>
+  <CodeBlock title="Terminal">
+    <pre><code>git clone https://github.com/wassertim/abacus-cli.git
+cd abacus-cli
+npm install
+npm run build
+npm link          # makes `abacus` available globally</code></pre>
+  </CodeBlock>
+
+  <h2 id="configuration">{t.gettingStarted.configuration}</h2>
+  <p>Set your Abacus instance URL via environment variable:</p>
+  <CodeBlock>
+    <pre><code>export ABACUS_URL="https://your-abacus-instance.example.com/portal/myabacus"</code></pre>
+  </CodeBlock>
+  <p>Or use the config command:</p>
+  <CodeBlock>
+    <pre><code>abacus config set url https://your-abacus-instance.example.com/portal/myabacus</code></pre>
+  </CodeBlock>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>Default</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>ABACUS_URL</code></td>
+        <td><code>https://abacus.example.com/portal/myabacus</code></td>
+        <td>Base URL of your Abacus portal</td>
+      </tr>
+      <tr>
+        <td><code>ABACUS_CONFIG_DIR</code></td>
+        <td><code>~/.abacus-cli</code></td>
+        <td>Directory for session state and discovery data</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 id="first-login">{t.gettingStarted.firstLogin}</h2>
+  <p>Open a real browser window for manual login. Session cookies are persisted locally so subsequent commands run headlessly.</p>
+  <CodeBlock>
+    <pre><code>abacus login</code></pre>
+  </CodeBlock>
+
+  <h2 id="first-entry">{t.gettingStarted.firstEntry}</h2>
+  <CodeBlock>
+    <pre><code>abacus time log --project 71100000001 --hours 8 --service-type 1435 --text "Development"</code></pre>
+  </CodeBlock>
+  <p>If a matching entry (same date + project) already exists, you'll be prompted to update it or create a new one.</p>
+
+  <h2 id="check-status">{t.gettingStarted.checkStatus}</h2>
+  <p>Get a compact weekly status:</p>
+  <CodeBlock>
+    <pre><code>abacus summary</code></pre>
+  </CodeBlock>
+  <pre><code>Week 06 · 32.5 / 40h · 7.5h remaining · Wed, Thu missing
+Overtime: +12.5h (1.6d) · Vacation: 15.0d left
+(updated 2h ago)</code></pre>
+</Docs>

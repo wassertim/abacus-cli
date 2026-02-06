@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0a0a0b"/>
+  <text x="600" y="260" font-family="monospace" font-size="72" font-weight="bold" fill="#ededef" text-anchor="middle">abacus-cli</text>
+  <text x="600" y="330" font-family="sans-serif" font-size="28" fill="#8b8b8d" text-anchor="middle">Automate time entries in Abacus ERP</text>
+  <text x="600" y="410" font-family="monospace" font-size="22" fill="#6366f1" text-anchor="middle">$ abacus time batch --project myproj --hours 8</text>
+</svg>
