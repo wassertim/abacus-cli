@@ -61,7 +61,8 @@ If a matching entry (same date + project) already exists, you'll be prompted to 
 ### List entries
 
 ```bash
-abacus time list --monthYear 01.2025
+abacus time list                      # current month
+abacus time list --monthYear 01.2025  # specific month
 ```
 
 ### Weekly status
