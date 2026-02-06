@@ -1,6 +1,26 @@
-import { chromium, BrowserContext } from "playwright";
+// Must be set BEFORE importing rebrowser-playwright-core
+process.env.REBROWSER_PATCHES_RUNTIME_FIX_MODE = "addBinding";
+
+import { chromium, BrowserContext } from "rebrowser-playwright-core";
 import fs from "fs";
 import { config, ensureConfigDir, hasState } from "./config";
+
+const STEALTH_ARGS = [
+  "--disable-blink-features=AutomationControlled",
+  "--no-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+  "--disable-extensions",
+  "--disable-infobars",
+  "--disable-background-networking",
+  "--disable-sync",
+  "--disable-translate",
+  "--metrics-recording-only",
+  "--no-first-run",
+];
+
+const USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 export async function login(): Promise<void> {
   ensureConfigDir();
@@ -12,36 +32,22 @@ export async function login(): Promise<void> {
   console.log("The browser will close automatically once login is detected.");
   console.log("");
 
-  const browser = await chromium.launch({ headless: false });
-  const context = await browser.newContext();
+  const browser = await chromium.launch({ headless: false, args: STEALTH_ARGS });
+  const context = await browser.newContext({
+    userAgent: USER_AGENT,
+    viewport: { width: 1280, height: 800 },
+  });
   const page = await context.newPage();
 
   await page.goto(config.abacusUrl);
 
-  // Wait for successful login by detecting the portal page loaded after auth.
-  // We wait for a URL change away from any login/auth page, or for a known
-  // element that only appears after login. Using a generous timeout since the
-  // user logs in manually.
+  // Wait for successful login by detecting the Vaadin portal menu
   try {
-    await page.waitForFunction(
-      () => {
-        // Consider logged in when we're on the portal and the page has
-        // meaningful content (not a login form redirect).
-        const url = window.location.href;
-        const isPortal =
-          url.includes("/portal/") || url.includes("/myabacus");
-        const hasNav =
-          document.querySelector("nav") !== null ||
-          document.querySelector("[class*='dashboard']") !== null ||
-          document.querySelector("[class*='menu']") !== null ||
-          document.querySelector("[class*='header']") !== null;
-        return isPortal && hasNav;
-      },
-      {},
-      { timeout: 300_000 } // 5 minutes for manual login
-    );
+    await page
+      .locator('vaadin-button[movie-id="menu-item_rapportierung"]')
+      .waitFor({ state: "visible", timeout: 300_000 });
+    console.log("Login detected!");
   } catch {
-    // If the auto-detection doesn't work, give the user a manual option
     console.log("");
     console.log(
       "Auto-detection timed out. If you are logged in, press Enter in this terminal to save the session."
@@ -73,8 +79,21 @@ export async function createAuthenticatedContext(): Promise<{
 
   const storageState = JSON.parse(fs.readFileSync(config.statePath, "utf-8"));
 
-  const browser = await chromium.launch({ headless: false });
-  const context = await browser.newContext({ storageState });
+  const browser = await chromium.launch({
+    headless: true,
+    args: STEALTH_ARGS,
+  });
+  const context = await browser.newContext({
+    storageState,
+    userAgent: USER_AGENT,
+    viewport: { width: 1280, height: 800 },
+    extraHTTPHeaders: {
+      "sec-ch-ua":
+        '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="99"',
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": '"macOS"',
+    },
+  });
 
   return {
     context,
