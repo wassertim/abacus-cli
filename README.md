@@ -134,11 +134,26 @@ date,project,serviceType,hours,text
 
 Duplicate detection: entries with the same date + project as an existing entry are automatically skipped.
 
-### Delete an entry
+### Delete entries
+
+**Interactive mode** — run without flags to select entries from the current month:
+
+```bash
+npx abacus time delete
+```
+
+This opens a checkbox picker with all entries for the current month. Navigate with arrow keys, toggle with space, `a` to select all, and enter to confirm. Selected entries are deleted in one browser session.
+
+**Targeted mode** — delete a specific entry by date and project:
 
 ```bash
 npx abacus time delete --date 2025-01-15 --project 71100000001
 ```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--date <YYYY-MM-DD>` | no | Date of the entry (required if `--project` is used) |
+| `--project <id>` | no | Project number or alias |
 
 ### Discover API calls
 

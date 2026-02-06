@@ -401,6 +401,54 @@ async function deleteSidePanelEntry(page: Page): Promise<void> {
   await waitForVaadin(page);
 }
 
+/** Delete a grid row directly via the inline three-dot context menu. */
+async function deleteRowViaContextMenu(page: Page, rowIndex: number): Promise<void> {
+  // Click the three-dot menu button on the target row
+  const btnBox = await page.evaluate((idx) => {
+    const grid = document.querySelector('vaadin-grid[movie-id="ServicesList"]');
+    if (!grid || !grid.shadowRoot) return null;
+    const tbody = grid.shadowRoot.querySelector("#items");
+    if (!tbody) return null;
+    const rows = tbody.querySelectorAll("tr");
+    if (!rows[idx]) return null;
+    // The menu button is in the last cell's slotted content
+    const cells = rows[idx].querySelectorAll("td");
+    for (const cell of Array.from(cells)) {
+      const slot = cell.querySelector("slot") as HTMLSlotElement | null;
+      if (!slot) continue;
+      const assigned = slot.assignedElements();
+      for (const el of assigned) {
+        const btn = el.querySelector("vaadin-button.dl-menubutton") || (el.matches("vaadin-button.dl-menubutton") ? el : null);
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+        }
+      }
+    }
+    return null;
+  }, rowIndex);
+
+  if (!btnBox) throw new Error(`Menu button not found on row ${rowIndex}`);
+
+  await page.mouse.click(btnBox.x, btnBox.y);
+
+  // Wait for the context menu overlay to appear
+  const deleteItem = page.locator('vaadin-context-menu-item[movie-id="datalist_context_delete"]');
+  await deleteItem.waitFor({ state: "visible", timeout: 10_000 });
+  await deleteItem.click();
+  await waitForVaadin(page);
+
+  // Confirm deletion in the dialog
+  const confirmBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
+  await confirmBtn.waitFor({ state: "visible", timeout: 10_000 });
+  await confirmBtn.click();
+  await waitForVaadin(page);
+
+  // Wait for confirm dialog to close and grid to stabilize
+  await confirmBtn.waitFor({ state: "hidden", timeout: 10_000 });
+  await page.waitForTimeout(500);
+}
+
 /** Close the side panel if it's currently open. */
 async function closeSidePanelIfOpen(page: Page): Promise<void> {
   const panel = page.locator('va-side-panel[movie-id="id_editRecordSidePanel"]');
@@ -875,6 +923,51 @@ export async function deleteTime(
     await close();
   }
   });
+}
+
+/**
+ * Interactive delete: load all entries for the current month,
+ * let the user pick which ones to delete via checkbox, then delete them.
+ * Returns the entries so the command layer can drive the selection UI.
+ */
+export async function loadMonthEntries(): Promise<{
+  entries: ExistingEntry[];
+  deleteFn: (indices: number[]) => Promise<void>;
+  closeFn: () => Promise<void>;
+}> {
+  const { context, close } = await createAuthenticatedContext();
+  const page = await context.newPage();
+
+  try {
+    await navigateToLeistungen(page);
+    const now = new Date();
+    const monthYear = `${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
+    await setMonthFilter(page, monthYear);
+
+    spin(t().readingEntries);
+    const entries = await readGridEntries(page);
+    stopSpinner();
+
+    const deleteFn = async (indices: number[]) => {
+      // Re-navigate to ensure page is fresh after idle time in the picker
+      await navigateToLeistungen(page);
+      await setMonthFilter(page, monthYear);
+      await waitForVaadin(page);
+
+      // Sort descending so that row indices stay valid as we delete
+      const sorted = [...indices].sort((a, b) => b - a);
+      for (let i = 0; i < sorted.length; i++) {
+        spin(t().deletingEntry(i + 1, sorted.length));
+        await deleteRowViaContextMenu(page, sorted[i]);
+      }
+      succeed(success(t().entriesDeleted(sorted.length)));
+    };
+
+    return { entries, deleteFn, closeFn: close };
+  } catch (e) {
+    await close();
+    throw e;
+  }
 }
 
 /**

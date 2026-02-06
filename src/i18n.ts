@@ -83,6 +83,10 @@ export interface Translations {
   entriesDeleted: (count: number) => string;
   invalidSelection: string;
   entryDeleted: string;
+  selectEntriesToDelete: string;
+  selectHint: string;
+  noEntriesSelected: string;
+  confirmDeleteSelected: (count: number) => string;
 
   // --- CLI output: list report ---
   missingDayRow: string;
@@ -195,6 +199,10 @@ const de: Translations = {
   entriesDeleted: (count) => `${count} Einträge gelöscht.`,
   invalidSelection: "Ungültige Auswahl. Abgebrochen.",
   entryDeleted: "Eintrag gelöscht.",
+  selectEntriesToDelete: "Einträge zum Löschen auswählen:",
+  selectHint: "Leertaste=umschalten, a=alle, Enter=bestätigen",
+  noEntriesSelected: "Keine Einträge ausgewählt.",
+  confirmDeleteSelected: (count) => `${count} Einträge löschen? [j/n] `,
 
   // List report
   missingDayRow: "Keine Einträge",
@@ -309,6 +317,10 @@ const en: Translations = {
   entriesDeleted: (count) => `${count} entries deleted.`,
   invalidSelection: "Invalid selection. Cancelled.",
   entryDeleted: "Entry deleted.",
+  selectEntriesToDelete: "Select entries to delete:",
+  selectHint: "space=toggle, a=all, enter=confirm",
+  noEntriesSelected: "No entries selected.",
+  confirmDeleteSelected: (count) => `Delete ${count} entries? [y/n] `,
 
   // List report
   missingDayRow: "No entries",
@@ -423,6 +435,10 @@ const fr: Translations = {
   entriesDeleted: (count) => `${count} entrées supprimées.`,
   invalidSelection: "Sélection invalide. Annulé.",
   entryDeleted: "Entrée supprimée.",
+  selectEntriesToDelete: "Sélectionner les entrées à supprimer:",
+  selectHint: "espace=basculer, a=tous, entrée=confirmer",
+  noEntriesSelected: "Aucune entrée sélectionnée.",
+  confirmDeleteSelected: (count) => `Supprimer ${count} entrées? [o/n] `,
 
   // List report
   missingDayRow: "Aucune entrée",
@@ -537,6 +553,10 @@ const it: Translations = {
   entriesDeleted: (count) => `${count} voci eliminate.`,
   invalidSelection: "Selezione non valida. Annullato.",
   entryDeleted: "Voce eliminata.",
+  selectEntriesToDelete: "Seleziona le voci da eliminare:",
+  selectHint: "spazio=seleziona, a=tutti, invio=conferma",
+  noEntriesSelected: "Nessuna voce selezionata.",
+  confirmDeleteSelected: (count) => `Eliminare ${count} voci? [s/n] `,
 
   // List report
   missingDayRow: "Nessuna voce",
@@ -651,6 +671,10 @@ const es: Translations = {
   entriesDeleted: (count) => `${count} entradas eliminadas.`,
   invalidSelection: "Selección inválida. Cancelado.",
   entryDeleted: "Entrada eliminada.",
+  selectEntriesToDelete: "Selecciona las entradas a eliminar:",
+  selectHint: "espacio=alternar, a=todos, intro=confirmar",
+  noEntriesSelected: "Ninguna entrada seleccionada.",
+  confirmDeleteSelected: (count) => `¿Eliminar ${count} entradas? [s/n] `,
 
   // List report
   missingDayRow: "Sin entradas",

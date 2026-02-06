@@ -2,10 +2,10 @@ import { Command } from "commander";
 import * as fs from "fs";
 import * as path from "path";
 import Table from "cli-table3";
-import { logTime, listTime, deleteTime, statusTime, batchLogTime, generateBatchFile, TimeEntry } from "../api";
-import { t } from "../i18n";
+import { logTime, listTime, deleteTime, statusTime, batchLogTime, generateBatchFile, loadMonthEntries, TimeEntry } from "../api";
+import { t, confirmDeleteKey } from "../i18n";
 import { bold, highlight, info, warn, err, fail } from "../ui";
-import { loadAliases, resolveProject, resolveServiceType, promptSelect } from "../aliases";
+import { loadAliases, resolveProject, resolveServiceType, promptSelect, promptCheckbox } from "../aliases";
 
 export function registerTimeCommands(program: Command): void {
   const time = program.command("time").description("Time tracking commands");
@@ -98,13 +98,55 @@ export function registerTimeCommands(program: Command): void {
 
   time
     .command("delete")
-    .description("Delete a time entry")
-    .requiredOption("--date <YYYY-MM-DD>", "Date of the entry to delete")
+    .description("Delete time entries (interactive if no flags given)")
+    .option("--date <YYYY-MM-DD>", "Date of the entry to delete")
     .option("--project <name>", "Project number or alias")
     .action(async (options) => {
-      const aliases = loadAliases();
-
       try {
+        // Interactive mode: no flags → load current month, checkbox picker
+        if (!options.date && !options.project) {
+          const { entries, deleteFn, closeFn } = await loadMonthEntries();
+
+          if (entries.length === 0) {
+            console.log(info(t().noEntriesFound));
+            await closeFn();
+            return;
+          }
+
+          const items = entries.map((e) => ({
+            label: `${e.date}  ${e.project}  ${e.serviceType}  ${e.hours}`,
+            detail: e.text,
+          }));
+
+          console.log("");
+          const selected = await promptCheckbox(
+            items,
+            t().selectEntriesToDelete,
+            t().selectHint
+          );
+
+          if (selected.length === 0) {
+            console.log(info(t().noEntriesSelected));
+            await closeFn();
+            return;
+          }
+
+          // Map selected indices to rowIndex values
+          const rowIndices = selected.map((i) => entries[i].rowIndex);
+
+          console.log("");
+          await deleteFn(rowIndices);
+          await closeFn();
+          return;
+        }
+
+        // Targeted mode: --date (required in this path) + optional --project
+        if (!options.date) {
+          fail(err("--date is required when --project is specified."));
+          process.exit(1);
+        }
+
+        const aliases = loadAliases();
         let project: string;
         if (options.project) {
           project = resolveProject(options.project);

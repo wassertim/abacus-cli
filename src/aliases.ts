@@ -128,3 +128,98 @@ export function promptSelect(
     stdin.on("data", onData);
   });
 }
+
+/**
+ * Interactive checkbox selector.
+ * Returns indices of selected items.
+ */
+export function promptCheckbox(
+  items: { label: string; detail?: string }[],
+  header: string,
+  hint: string
+): Promise<number[]> {
+  if (items.length === 0) return Promise.resolve([]);
+
+  const selected = new Set<number>();
+  let cursor = 0;
+  let firstRender = true;
+
+  function render() {
+    if (!firstRender) {
+      process.stdout.write(`\x1b[${items.length}A`);
+    }
+    firstRender = false;
+    for (let i = 0; i < items.length; i++) {
+      const check = selected.has(i) ? chalk.green("■") : "□";
+      const pointer = i === cursor ? chalk.cyan("❯") : " ";
+      const label = i === cursor ? chalk.cyan(items[i].label) : items[i].label;
+      const detail = items[i].detail ? dim(`  ${items[i].detail}`) : "";
+      process.stdout.write(`\x1b[2K${pointer} ${check} ${label}${detail}\n`);
+    }
+  }
+
+  return new Promise((resolve) => {
+    console.log(bold(header));
+    console.log(dim(hint));
+    render();
+
+    const { stdin } = process;
+    const wasRaw = stdin.isRaw;
+    stdin.setRawMode(true);
+    stdin.resume();
+
+    function onData(key: Buffer) {
+      const s = key.toString();
+
+      // Enter — confirm
+      if (s === "\r" || s === "\n") {
+        cleanup();
+        resolve(Array.from(selected).sort((a, b) => a - b));
+        return;
+      }
+
+      // Ctrl+C
+      if (s === "\x03") {
+        cleanup();
+        process.exit(0);
+      }
+
+      // Space — toggle current
+      if (s === " ") {
+        if (selected.has(cursor)) selected.delete(cursor);
+        else selected.add(cursor);
+        render();
+      }
+
+      // 'a' — toggle all
+      if (s === "a") {
+        if (selected.size === items.length) {
+          selected.clear();
+        } else {
+          for (let i = 0; i < items.length; i++) selected.add(i);
+        }
+        render();
+      }
+
+      // Arrow up / k
+      if (s === "\x1b[A" || s === "k") {
+        cursor = (cursor - 1 + items.length) % items.length;
+        render();
+      }
+
+      // Arrow down / j
+      if (s === "\x1b[B" || s === "j") {
+        cursor = (cursor + 1) % items.length;
+        render();
+      }
+    }
+
+    function cleanup() {
+      stdin.removeListener("data", onData);
+      stdin.setRawMode(wasRaw ?? false);
+      stdin.pause();
+    }
+
+    stdin.on("data", onData);
+  });
+}
