@@ -1,6 +1,7 @@
-import { Page } from "rebrowser-playwright-core";
+import { config } from "./config";
 
 export type Locale = "de" | "en" | "fr" | "it" | "es";
+const validLocales: readonly string[] = ["de", "en", "fr", "it", "es"];
 
 export interface Translations {
   // --- Vaadin UI strings (critical for selectors) ---
@@ -744,9 +745,42 @@ const es: Translations = {
 
 const locales: Record<Locale, Translations> = { de, en, fr, it, es };
 
+// --- Locale resolution ---
+
+export type LocaleSource = "env" | "file" | "system" | "default";
+
+/** Resolve locale from env var → config file → system locale → "en" fallback. */
+export function resolveLocale(): { locale: Locale; source: LocaleSource } {
+  // 1. ABACUS_LOCALE env var
+  if (process.env.ABACUS_LOCALE && validLocales.includes(process.env.ABACUS_LOCALE)) {
+    return { locale: process.env.ABACUS_LOCALE as Locale, source: "env" };
+  }
+
+  // 2. config.json locale field (already resolved env → file in config.ts)
+  if (config.locale && validLocales.includes(config.locale)) {
+    return { locale: config.locale as Locale, source: "file" };
+  }
+
+  // 3. System locale
+  const systemLang =
+    Intl.DateTimeFormat().resolvedOptions().locale ||
+    process.env.LC_ALL ||
+    process.env.LANG ||
+    "";
+  const short = systemLang.split(/[-_.]/)[0];
+  if (short && validLocales.includes(short)) {
+    return { locale: short as Locale, source: "system" };
+  }
+
+  // 4. Fallback
+  return { locale: "en", source: "default" };
+}
+
 // --- Module-level state ---
 
-let currentLocale: Locale = "de";
+const resolved = resolveLocale();
+let currentLocale: Locale = resolved.locale;
+export let localeSource: LocaleSource = resolved.source;
 
 export function setLocale(locale: Locale): void {
   currentLocale = locale;
@@ -776,31 +810,3 @@ export function confirmDeleteKey(): string {
   return map[currentLocale];
 }
 
-/**
- * Auto-detect the Abacus UI locale from the page.
- * Reads document.documentElement.lang, falling back to matching known nav text.
- */
-export async function detectLocale(page: Page): Promise<Locale> {
-  const lang = await page.evaluate(() =>
-    document.documentElement.lang?.toLowerCase()
-  );
-
-  if (lang) {
-    const short = lang.split("-")[0] as Locale;
-    if (short in locales) return short;
-  }
-
-  // Fallback: read the nav link's title attribute and match against known translations
-  const navTitle = await page
-    .locator('a[href^="proj_services"]')
-    .getAttribute("title")
-    .catch(() => null);
-
-  if (navTitle) {
-    for (const [locale, tr] of Object.entries(locales) as [Locale, Translations][]) {
-      if (tr.navLeistungen === navTitle) return locale;
-    }
-  }
-
-  return "de"; // default
-}

@@ -8,6 +8,7 @@ import { discover } from "./discover";
 import { registerTimeCommands } from "./commands/time";
 import { registerAliasCommands } from "./commands/alias";
 import { config, saveConfigFile, getConfigFilePath } from "./config";
+import { getLocale, localeSource } from "./i18n";
 
 const program = new Command();
 
@@ -74,11 +75,11 @@ configCmd
   .argument("<key>", "Config key (e.g. url)")
   .argument("<value>", "Config value")
   .action((key: string, value: string) => {
-    const keyMap: Record<string, string> = { url: "abacusUrl" };
+    const keyMap: Record<string, string> = { url: "abacusUrl", locale: "locale" };
     const configKey = keyMap[key];
     if (!configKey) {
       console.error(chalk.red(`Unknown config key: ${key}`));
-      console.error(chalk.dim("Available keys: url"));
+      console.error(chalk.dim("Available keys: url, locale"));
       process.exit(1);
     }
     saveConfigFile({ [configKey]: value });
@@ -97,8 +98,8 @@ configCmd
       },
       {
         key: "locale",
-        value: config.locale || chalk.dim("(auto-detect)"),
-        source: process.env.ABACUS_LOCALE ? "env" : "-",
+        value: getLocale(),
+        source: localeSource,
       },
       {
         key: "headless",

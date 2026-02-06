@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 abacus-cli is a TypeScript CLI tool that automates time entry logging in Abacus ERP. Abacus uses Vaadin (server-side Java UI framework) with no REST API, so all interaction is done via **Playwright browser automation**. The target instance URL is configured via the `ABACUS_URL` environment variable.
 
-The project supports **multiple UI languages** (de, en, fr, it, es). Locale is auto-detected from the Abacus page or overridden via `ABACUS_LOCALE` env var. All user-facing strings live in `src/i18n.ts`.
+The project supports **multiple UI languages** (de, en, fr, it, es). Locale is resolved at startup via priority chain: `ABACUS_LOCALE` env var → `config.json` `locale` field → system locale (`Intl.DateTimeFormat` / `LANG`) → `"en"` fallback. All user-facing strings live in `src/i18n.ts`.
 
 ## Commands
 

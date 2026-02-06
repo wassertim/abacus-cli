@@ -4,7 +4,7 @@
 import { Page } from "rebrowser-playwright-core";
 import { waitForVaadin, fillCombobox, selectComboboxByIndex } from "./vaadin";
 import { config } from "./config";
-import { t, detectLocale, setLocale, Locale } from "./i18n";
+import { t } from "./i18n";
 import { spin, fail, succeed, stopSpinner } from "./ui";
 import { err, warn } from "./ui";
 
@@ -36,16 +36,6 @@ export async function withCaptchaRetry<T>(fn: () => Promise<T>): Promise<T> {
       return fn();
     }
     throw error;
-  }
-}
-
-/** Initialize locale: use env var override or auto-detect from the page. */
-async function initLocale(page: Page): Promise<void> {
-  if (config.locale) {
-    setLocale(config.locale as Locale);
-  } else {
-    const detected = await detectLocale(page);
-    setLocale(detected);
   }
 }
 
@@ -119,9 +109,6 @@ export async function navigateToLeistungen(page: Page): Promise<void> {
     const url = page.url();
     throw new Error(t().sessionExpired(url));
   }
-
-  // Auto-detect locale after page loads and before navigating further
-  await initLocale(page);
 
   spin(t().openingTimeTracking);
   const isExpanded = await rapportierungToggle.getAttribute("aria-expanded");
