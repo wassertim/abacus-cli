@@ -217,6 +217,10 @@ program
     const remaining = cache.remaining as number;
     const missingStr = missingDays.map((d) => d.dayName).join(", ");
     console.log(chalk.yellow(`⚠ ${t().checkWarning(missingStr, remaining.toFixed(1))}`));
+
+    const hours = Math.min(remaining / missingDays.length, 8).toFixed(2);
+    const date = missingDays[0].date.split(".").reverse().join("-");
+    console.log(chalk.dim(`  run: abacus time log --hours ${hours} --text "${t().defaultBookingText}" --date ${date}`));
   });
 
 registerTimeCommands(program);

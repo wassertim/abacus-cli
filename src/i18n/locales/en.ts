@@ -145,4 +145,6 @@ export const en: Translations = {
   timeAgoMinutes: (n) => `${n}min`,
   timeAgoHours: (n) => `${n}h`,
   timeAgoDays: (n) => `${n}d`,
+  updatingCache: "Updating status cache...",
+  defaultBookingText: "Development",
 };

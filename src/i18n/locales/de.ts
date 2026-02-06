@@ -145,4 +145,6 @@ export const de: Translations = {
   timeAgoMinutes: (n) => `${n}min`,
   timeAgoHours: (n) => `${n}h`,
   timeAgoDays: (n) => `${n}d`,
+  updatingCache: "Status-Cache wird aktualisiert...",
+  defaultBookingText: "Entwicklung",
 };

@@ -2,6 +2,7 @@
 // There is no REST API. All interactions must go through browser automation.
 
 import Table from "cli-table3";
+import { Page } from "rebrowser-playwright-core";
 import { createAuthenticatedContext } from "./auth";
 import { config, ensureConfigDir } from "./config";
 import { t, getLocale, confirmDeleteKey } from "./i18n";
@@ -144,6 +145,83 @@ function printHints(entries: ExistingEntry[], missingDayDates: string[], hours: 
 /** Get short weekday name using Intl (locale-aware, e.g. Mon/Di/Lun). */
 function shortDayName(d: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(d);
+}
+
+/**
+ * Refresh the week cache after a log/delete operation.
+ * Switches to week view, reads current entries, and updates the cache file.
+ */
+async function refreshWeekCache(page: Page): Promise<void> {
+  try {
+    spin(t().updatingCache);
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+
+    await setWeekFilter(page, todayStr);
+    const entries = await readGridEntries(page);
+
+    const locale = getLocale();
+    const dayOfWeek = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) - 1));
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    const weekNum = getISOWeekNumber(today);
+
+    // Compute missing days (same logic as statusTime)
+    const missingDayNames: string[] = [];
+    const missingDayDates: string[] = [];
+    for (let d = new Date(monday); d <= today && d <= friday; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue;
+      const dStr = formatDate(d.toISOString().split("T")[0]);
+      const hasEntry = entries.some((e) => e.date === dStr);
+      if (!hasEntry) {
+        missingDayNames.push(shortDayName(new Date(d), locale));
+        missingDayDates.push(dStr);
+      }
+    }
+
+    // Sum hours from entries
+    const worked = entries.reduce((sum, e) => {
+      const h = parseFloat(e.hours.replace(",", "."));
+      return sum + (isNaN(h) ? 0 : h);
+    }, 0);
+
+    // Preserve saldo/vacation/target from existing cache
+    let existingCache: Record<string, unknown> | null = null;
+    try {
+      existingCache = JSON.parse(fs.readFileSync(config.statusCachePath, "utf-8"));
+    } catch {}
+
+    const target = (existingCache?.target as number) || 40;
+    const remaining = Math.max(0, target - worked);
+
+    const fmtFull = (d: Date) =>
+      `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+
+    ensureConfigDir();
+    const cache = {
+      updatedAt: new Date().toISOString(),
+      weekNumber: weekNum,
+      monday: fmtFull(monday),
+      friday: fmtFull(friday),
+      worked,
+      target,
+      remaining,
+      missingDays: missingDayNames.map((name, i) => ({
+        date: missingDayDates[i],
+        dayName: name,
+      })),
+      saldo: existingCache?.saldo ?? null,
+      vacation: existingCache?.vacation ?? null,
+    };
+    fs.writeFileSync(config.statusCachePath, JSON.stringify(cache, null, 2) + "\n");
+    stopSpinner();
+  } catch {
+    // Cache refresh is non-critical, silently ignore
+    stopSpinner();
+  }
 }
 
 /**
@@ -442,6 +520,8 @@ export async function logTime(entry: TimeEntry): Promise<void> {
       await saveEntry(page);
       succeed(success(t().saved));
     }
+
+    await refreshWeekCache(page);
   } finally {
     await close();
   }
@@ -517,6 +597,7 @@ export async function deleteTime(
           await deleteSidePanelEntry(page);
         }
         succeed(success(t().entriesDeleted(matches.length)));
+        await refreshWeekCache(page);
         return;
       }
       const idx = parseInt(answer, 10) - 1;
@@ -535,6 +616,8 @@ export async function deleteTime(
     await deleteSidePanelEntry(page);
 
     succeed(success(t().entryDeleted));
+
+    await refreshWeekCache(page);
   } finally {
     await close();
   }
@@ -577,6 +660,8 @@ export async function loadMonthEntries(): Promise<{
         await deleteRowViaContextMenu(page, sorted[i]);
       }
       succeed(success(t().entriesDeleted(sorted.length)));
+
+      await refreshWeekCache(page);
     };
 
     return { entries, deleteFn, closeFn: close };
@@ -647,6 +732,10 @@ export async function batchLogTime(entries: TimeEntry[]): Promise<void> {
 
     stopSpinner();
     succeed(success(t().batchSummary(created, skipped)));
+
+    if (created > 0) {
+      await refreshWeekCache(page);
+    }
   } finally {
     await close();
   }

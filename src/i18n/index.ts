@@ -142,6 +142,10 @@ export interface Translations {
   timeAgoMinutes: (n: number) => string;
   timeAgoHours: (n: number) => string;
   timeAgoDays: (n: number) => string;
+
+  // --- CLI output: cache refresh ---
+  updatingCache: string;
+  defaultBookingText: string;
 }
 
 const locales: Record<Locale, Translations> = { de, en, fr, it, es };

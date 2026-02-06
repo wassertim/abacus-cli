@@ -246,7 +246,7 @@ export function registerTimeCommands(program: Command): void {
 
         // --- Dry-run mode ---
         if (options.dryRun) {
-          // Fetch existing entries from Abacus (also detects locale)
+          // Fetch existing entries from Abacus
           const dates = entries.map((e) => e.date);
           const existing = await fetchExistingEntries(dates);
 
