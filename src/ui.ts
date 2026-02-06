@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import ora, { Ora } from "ora";
+import * as readline from "readline";
 
 // ---------------------------------------------------------------------------
 // Semantic color helpers
@@ -54,4 +55,18 @@ export function fail(text: string): void {
   } else {
     ora(text).fail();
   }
+}
+
+/** Prompt the user for input in the terminal. */
+export function promptUser(question: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase());
+    });
+  });
 }
