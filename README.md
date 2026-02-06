@@ -1,8 +1,14 @@
 # abacus-cli
 
-CLI tool for automating time entry logging in Abacus ERP via Playwright browser automation.
+CLI tool for automating time entry logging in [Abacus ERP](https://www.abacus.ch) via Playwright browser automation.
 
-Abacus uses Vaadin (a server-side Java UI framework) with no REST API, so all interaction is done through headless browser automation. The CLI drives a real Chromium browser, fills forms, reads grids, and handles Vaadin's async server round-trips.
+[Abacus](https://www.abacus.ch) is a Swiss ERP system widely used by companies in Switzerland for accounting, payroll, and time tracking. Its web portal is built on Vaadin (a server-side Java UI framework) and does not expose a REST API — so this tool uses headless browser automation instead. The CLI drives a real Chromium browser, fills forms, reads grids, and handles Vaadin's async server round-trips.
+
+## Who is this for?
+
+If you log your work hours in Abacus and want to do it from the terminal — especially batch-filling whole weeks, checking your status, or scripting entries — this tool is for you.
+
+This project is open source under the MIT license. You're welcome to fork it, adapt it to your Abacus setup, and submit pull requests if you build something others could use too.
 
 ## Prerequisites
 
@@ -248,6 +254,10 @@ npm run dev        # Run from source via ts-node
 npm run build      # Compile TypeScript to dist/
 npm start          # Run compiled version
 ```
+
+## Contributing
+
+Found a bug or want to add a feature? Fork the repo, make your changes, and open a pull request. There's no formal contribution guide — just keep it clean and consistent with the existing code.
 
 ## License
 
