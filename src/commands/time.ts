@@ -29,12 +29,14 @@ export function registerTimeCommands(program: Command): void {
   time
     .command("list")
     .description("List time entries for a month")
-    .requiredOption("--monthYear <MM.YYYY>", "Month and year (e.g. 01.2025)")
+    .option("--monthYear <MM.YYYY>", "Month and year (e.g. 01.2025, default: current month)")
     .action(async (options) => {
-      console.log(info(t().listingEntries(options.monthYear)));
+      const now = new Date();
+      const monthYear = options.monthYear || `${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
+      console.log(info(t().listingEntries(monthYear)));
 
       try {
-        await listTime(options.monthYear);
+        await listTime(monthYear);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         fail(err(message));
