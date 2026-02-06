@@ -493,13 +493,14 @@ export async function readWeeklyReport(page: Page): Promise<WeeklyReport | null>
     const texts = flexLayouts.map(fl => fl.textContent?.trim() || "");
 
     // Rows are 8 cells: [label, Mon, Tue, Wed, Thu, Fri, Total, spacer]
-    // Scan for label cells whose Total column (offset +6) is a decimal number.
-    // Values use dot-decimal format: "8.00", "32.00", "-8.00".
+    // Scan for rows where ALL day columns (+1..+5) and Total (+6) are numeric.
+    // This skips the "In & Out" row (empty day columns) and header rows.
     const numPattern = /^-?\d+\.\d{2}$/;
     const rowTotals: string[] = [];
 
     for (let i = 0; i < texts.length; i++) {
-      if (texts[i] && !numPattern.test(texts[i]) && i + 6 < texts.length && numPattern.test(texts[i + 6])) {
+      if (texts[i] && !numPattern.test(texts[i]) && i + 6 < texts.length
+          && numPattern.test(texts[i + 1]) && numPattern.test(texts[i + 6])) {
         rowTotals.push(texts[i + 6]);
       }
     }
