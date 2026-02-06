@@ -9,7 +9,7 @@ export default {
   home: {
     title: 'abacus-cli',
     subtitle: 'Zeiteinträge in Abacus ERP automatisieren — direkt aus dem Terminal.',
-    description: 'Ein CLI-Tool, das Abacus per Headless-Browser-Automatisierung steuert — weil Abacus keine API hat.',
+    description: 'Ein Command-Line-Interface für Abacus ERP, angetrieben durch Browser-Automatisierung im Hintergrund.',
     install: 'Loslegen',
     viewDocs: 'Dokumentation',
     features: {

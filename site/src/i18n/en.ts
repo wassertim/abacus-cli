@@ -9,7 +9,7 @@ export default {
   home: {
     title: 'abacus-cli',
     subtitle: 'Automate time entries in Abacus ERP from the command line.',
-    description: 'A CLI tool that drives Abacus via headless browser automation — because Abacus has no API.',
+    description: 'A command-line interface for Abacus ERP, powered by browser automation under the hood.',
     install: 'Get Started',
     viewDocs: 'Read the Docs',
     features: {
