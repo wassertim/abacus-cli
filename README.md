@@ -4,8 +4,6 @@ CLI tool for automating time entry logging in Abacus ERP via Playwright browser 
 
 Abacus uses Vaadin (a server-side Java UI framework) with no REST API, so all interaction is done through headless browser automation. The CLI drives a real Chromium browser, fills forms, reads grids, and handles Vaadin's async server round-trips.
 
-> **Note:** The Abacus UI is in German. CLI output, field names (Leistungsart, Buchungstext, etc.), and prompts reflect this.
-
 ## Prerequisites
 
 - Node.js 18+
@@ -46,15 +44,15 @@ npx abacus login
 ### Log time
 
 ```bash
-npx abacus time log --project 71100000001 --hours 8 --leistungsart 1435 --text "Development" --date 2025-01-15
+npx abacus time log --project 71100000001 --hours 8 --service-type 1435 --text "Development" --date 2025-01-15
 ```
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
 | `--project <id>` | yes | — | Project number |
 | `--hours <n>` | yes | — | Hours to log |
-| `--leistungsart <id>` | no | `1435` | Service type ID |
-| `--text <text>` | no | — | Booking text |
+| `--service-type <id>` | no | `1435` | Service type ID |
+| `--text <text>` | no | — | Description |
 | `--date <YYYY-MM-DD>` | no | today | Entry date |
 
 If a matching entry (same date + project) already exists, you'll be prompted to update it or create a new one.
@@ -67,7 +65,7 @@ npx abacus time list --monthYear 01.2025
 
 ### Weekly status
 
-Shows the Rapportmatrix (time account summary) for the week containing the given date, plus hints about missing days and remaining hours.
+Shows the time report (weekly summary) for the week containing the given date, plus hints about missing days and remaining hours.
 
 ```bash
 npx abacus time status --date 2025-01-15

@@ -5,7 +5,7 @@ import { bold, highlight, dim, success, err } from "../ui";
 export function registerAliasCommands(program: Command): void {
   const alias = program
     .command("alias")
-    .description("Manage project and leistungsart aliases");
+    .description("Manage project and service type aliases");
 
   alias
     .command("list")
@@ -13,7 +13,7 @@ export function registerAliasCommands(program: Command): void {
     .action(() => {
       const aliases = loadAliases();
       const projects = Object.entries(aliases.projects);
-      const las = Object.entries(aliases.leistungsarten);
+      const las = Object.entries(aliases.serviceTypes);
 
       if (projects.length === 0 && las.length === 0) {
         console.log(dim("No aliases configured. Use 'abacus alias add' to create one."));
@@ -31,7 +31,7 @@ export function registerAliasCommands(program: Command): void {
       if (las.length > 0) {
         if (projects.length > 0) console.log("");
         const maxAlias = Math.max(...las.map(([a]) => a.length));
-        console.log(bold("Leistungsarten:"));
+        console.log(bold("Service Types:"));
         for (const [alias, id] of las) {
           console.log(`  ${highlight(alias.padEnd(maxAlias))}  ${dim("→")} ${id}`);
         }
@@ -41,7 +41,7 @@ export function registerAliasCommands(program: Command): void {
   alias
     .command("add")
     .description("Add an alias (e.g. abacus alias add project da_dev 71100000001)")
-    .argument("<type>", "project or la")
+    .argument("<type>", "project or service-type")
     .argument("<alias>", "Short name")
     .argument("<id>", "Actual ID/number")
     .action((type: string, aliasName: string, id: string) => {
@@ -51,12 +51,12 @@ export function registerAliasCommands(program: Command): void {
         aliases.projects[aliasName] = id;
         saveAliases(aliases);
         console.log(success(`Project alias set: ${aliasName} → ${id}`));
-      } else if (type === "la" || type === "leistungsart") {
-        aliases.leistungsarten[aliasName] = id;
+      } else if (type === "service-type" || type === "st") {
+        aliases.serviceTypes[aliasName] = id;
         saveAliases(aliases);
-        console.log(success(`Leistungsart alias set: ${aliasName} → ${id}`));
+        console.log(success(`Service type alias set: ${aliasName} → ${id}`));
       } else {
-        console.log(err(`Unknown type "${type}". Use "project" or "la".`));
+        console.log(err(`Unknown type "${type}". Use "project" or "service-type".`));
         process.exit(1);
       }
     });
@@ -64,7 +64,7 @@ export function registerAliasCommands(program: Command): void {
   alias
     .command("remove")
     .description("Remove an alias")
-    .argument("<type>", "project or la")
+    .argument("<type>", "project or service-type")
     .argument("<alias>", "Alias to remove")
     .action((type: string, aliasName: string) => {
       const aliases = loadAliases();
@@ -77,16 +77,16 @@ export function registerAliasCommands(program: Command): void {
         delete aliases.projects[aliasName];
         saveAliases(aliases);
         console.log(success(`Removed project alias: ${aliasName}`));
-      } else if (type === "la" || type === "leistungsart") {
-        if (!(aliasName in aliases.leistungsarten)) {
-          console.log(err(`Leistungsart alias "${aliasName}" not found.`));
+      } else if (type === "service-type" || type === "st") {
+        if (!(aliasName in aliases.serviceTypes)) {
+          console.log(err(`Service type alias "${aliasName}" not found.`));
           process.exit(1);
         }
-        delete aliases.leistungsarten[aliasName];
+        delete aliases.serviceTypes[aliasName];
         saveAliases(aliases);
-        console.log(success(`Removed leistungsart alias: ${aliasName}`));
+        console.log(success(`Removed service type alias: ${aliasName}`));
       } else {
-        console.log(err(`Unknown type "${type}". Use "project" or "la".`));
+        console.log(err(`Unknown type "${type}". Use "project" or "service-type".`));
         process.exit(1);
       }
     });

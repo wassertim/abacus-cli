@@ -6,16 +6,24 @@ import chalk from "chalk";
 
 export interface AliasFile {
   projects: Record<string, string>;
-  leistungsarten: Record<string, string>;
+  serviceTypes: Record<string, string>;
 }
 
 const aliasPath = path.join(config.configDir, "aliases.json");
 
 export function loadAliases(): AliasFile {
   if (!fs.existsSync(aliasPath)) {
-    return { projects: {}, leistungsarten: {} };
+    return { projects: {}, serviceTypes: {} };
   }
-  return JSON.parse(fs.readFileSync(aliasPath, "utf-8"));
+  const raw = JSON.parse(fs.readFileSync(aliasPath, "utf-8"));
+  // Migrate legacy "leistungsarten" key to "serviceTypes"
+  if (raw.leistungsarten && !raw.serviceTypes) {
+    raw.serviceTypes = raw.leistungsarten;
+    delete raw.leistungsarten;
+    ensureConfigDir();
+    fs.writeFileSync(aliasPath, JSON.stringify(raw, null, 2) + "\n");
+  }
+  return { projects: raw.projects || {}, serviceTypes: raw.serviceTypes || {} };
 }
 
 export function saveAliases(aliases: AliasFile): void {
@@ -29,10 +37,10 @@ export function resolveProject(input: string): string {
   return aliases.projects[input] || input;
 }
 
-/** Resolve a leistungsart alias to its ID, or return the input as-is. */
-export function resolveLeistungsart(input: string): string {
+/** Resolve a service type alias to its ID, or return the input as-is. */
+export function resolveServiceType(input: string): string {
   const aliases = loadAliases();
-  return aliases.leistungsarten[input] || input;
+  return aliases.serviceTypes[input] || input;
 }
 
 /**

@@ -17,13 +17,13 @@ export interface Translations {
   captchaWaiting: string;
   captchaRetry: string;
   sessionExpired: (url: string) => string;
-  openingRapportierung: string;
-  openingLeistungen: string;
+  openingTimeTracking: string;
+  openingServices: string;
 
   // --- CLI output: filters ---
-  settingAnsichtMonth: string;
-  settingAnsichtWeek: string;
-  settingDatum: (date: string) => string;
+  settingViewMonth: string;
+  settingViewWeek: string;
+  settingDate: (date: string) => string;
 
   // --- CLI output: grid reading ---
   readingEntries: string;
@@ -31,10 +31,10 @@ export interface Translations {
   noEntriesFound: string;
   entriesTotal: (count: number) => string;
 
-  // --- CLI output: status (Rapportmatrix) ---
-  readingRapportmatrix: string;
-  rapportmatrixNotFound: string;
-  rapportmatrixTitle: string;
+  // --- CLI output: status (time report) ---
+  readingTimeReport: string;
+  timeReportNotFound: string;
+  timeReportTitle: string;
   colDay: string;
   colTotal: string;
   missingDays: (count: number, days: string) => string;
@@ -42,22 +42,22 @@ export interface Translations {
   exampleLabel: string;
 
   // --- CLI output: table headers ---
-  headerDatum: string;
-  headerProjekt: string;
-  headerLeistungsart: string;
-  headerStunden: string;
+  headerDate: string;
+  headerProject: string;
+  headerServiceType: string;
+  headerHours: string;
   headerText: string;
 
   // --- CLI output: form filling ---
-  settingDatumField: (date: string) => string;
-  settingProjekt: (project: string) => string;
-  settingLeistungsart: (la: string) => string;
-  settingStunden: (hours: number) => string;
-  settingBuchungstext: (text: string) => string;
+  settingDateField: (date: string) => string;
+  settingProject: (project: string) => string;
+  settingServiceType: (la: string) => string;
+  settingHours: (hours: number) => string;
+  settingDescription: (text: string) => string;
 
   // --- CLI output: log (duplicate check) ---
   alreadyBooked: (hours: string, date: string, project: string) => string;
-  leistungsartLabel: string;
+  serviceTypeLabel: string;
   textLabel: string;
   promptUpdateOrNew: string;
   promptYes: string;
@@ -110,24 +110,24 @@ const de: Translations = {
   captchaRetry: "Captcha solved. Retrying...",
   sessionExpired: (url) =>
     `Session abgelaufen oder Seite nicht geladen (URL: ${url}). Bitte 'abacus login' erneut ausführen.`,
-  openingRapportierung: "Opening Rapportierung menu...",
-  openingLeistungen: "Opening Leistungen...",
+  openingTimeTracking: "Rapportierung-Menü wird geöffnet...",
+  openingServices: "Leistungen werden geöffnet...",
 
   // Filters
-  settingAnsichtMonth: "Setting Ansicht to Monat...",
-  settingAnsichtWeek: "Setting Ansicht to Woche...",
-  settingDatum: (date) => `Setting Datum to ${date}...`,
+  settingViewMonth: "Ansicht auf Monat setzen...",
+  settingViewWeek: "Ansicht auf Woche setzen...",
+  settingDate: (date) => `Datum auf ${date} setzen...`,
 
   // Grid reading
-  readingEntries: "Reading entries...",
-  readingExistingEntries: "Reading existing entries...",
+  readingEntries: "Einträge werden gelesen...",
+  readingExistingEntries: "Bestehende Einträge werden gelesen...",
   noEntriesFound: "Keine Einträge gefunden.",
   entriesTotal: (count) => `${count} Einträge total.`,
 
   // Status
-  readingRapportmatrix: "Reading Rapportmatrix...",
-  rapportmatrixNotFound: "Rapportmatrix nicht gefunden.",
-  rapportmatrixTitle: "Rapportmatrix",
+  readingTimeReport: "Rapportmatrix wird gelesen...",
+  timeReportNotFound: "Rapportmatrix nicht gefunden.",
+  timeReportTitle: "Rapportmatrix",
   colDay: "Tag",
   colTotal: "Total",
   missingDays: (count, days) =>
@@ -136,23 +136,23 @@ const de: Translations = {
   exampleLabel: "Beispiel:",
 
   // Table headers
-  headerDatum: "Datum",
-  headerProjekt: "Projekt",
-  headerLeistungsart: "Leistungsart",
-  headerStunden: "Stunden",
+  headerDate: "Datum",
+  headerProject: "Projekt",
+  headerServiceType: "Leistungsart",
+  headerHours: "Stunden",
   headerText: "Text",
 
   // Form filling
-  settingDatumField: (date) => `Setting Datum: ${date}`,
-  settingProjekt: (project) => `Setting Projekt-Nr.: ${project}`,
-  settingLeistungsart: (la) => `Setting Leistungsart: ${la}`,
-  settingStunden: (hours) => `Setting Stunden: ${hours}`,
-  settingBuchungstext: (text) => `Setting Buchungstext: ${text}`,
+  settingDateField: (date) => `Setting Datum: ${date}`,
+  settingProject: (project) => `Setting Projekt-Nr.: ${project}`,
+  settingServiceType: (la) => `Setting Leistungsart: ${la}`,
+  settingHours: (hours) => `Setting Stunden: ${hours}`,
+  settingDescription: (text) => `Setting Buchungstext: ${text}`,
 
   // Log (duplicate check)
   alreadyBooked: (hours, date, project) =>
     `${hours} bereits gebucht am ${date} für Projekt ${project}`,
-  leistungsartLabel: "Leistungsart",
+  serviceTypeLabel: "Leistungsart",
   textLabel: "Text",
   promptUpdateOrNew: "Bestehenden updaten oder neuen hinzufügen? [u/n] ",
   promptYes: "u",
@@ -212,13 +212,13 @@ const en: Translations = {
   captchaRetry: "Captcha solved. Retrying...",
   sessionExpired: (url) =>
     `Session expired or page not loaded (URL: ${url}). Please run 'abacus login' again.`,
-  openingRapportierung: "Opening Rapportierung menu...",
-  openingLeistungen: "Opening Services...",
+  openingTimeTracking: "Opening time tracking menu...",
+  openingServices: "Opening Services...",
 
   // Filters
-  settingAnsichtMonth: "Setting view to Month...",
-  settingAnsichtWeek: "Setting view to Week...",
-  settingDatum: (date) => `Setting date to ${date}...`,
+  settingViewMonth: "Setting view to Month...",
+  settingViewWeek: "Setting view to Week...",
+  settingDate: (date) => `Setting date to ${date}...`,
 
   // Grid reading
   readingEntries: "Reading entries...",
@@ -227,9 +227,9 @@ const en: Translations = {
   entriesTotal: (count) => `${count} entries total.`,
 
   // Status
-  readingRapportmatrix: "Reading time report...",
-  rapportmatrixNotFound: "Time report not found.",
-  rapportmatrixTitle: "Time Report",
+  readingTimeReport: "Reading time report...",
+  timeReportNotFound: "Time report not found.",
+  timeReportTitle: "Time Report",
   colDay: "Day",
   colTotal: "Total",
   missingDays: (count, days) =>
@@ -238,23 +238,23 @@ const en: Translations = {
   exampleLabel: "Example:",
 
   // Table headers
-  headerDatum: "Date",
-  headerProjekt: "Project",
-  headerLeistungsart: "Service Type",
-  headerStunden: "Hours",
+  headerDate: "Date",
+  headerProject: "Project",
+  headerServiceType: "Service Type",
+  headerHours: "Hours",
   headerText: "Text",
 
   // Form filling
-  settingDatumField: (date) => `Setting date: ${date}`,
-  settingProjekt: (project) => `Setting project: ${project}`,
-  settingLeistungsart: (la) => `Setting service type: ${la}`,
-  settingStunden: (hours) => `Setting hours: ${hours}`,
-  settingBuchungstext: (text) => `Setting description: ${text}`,
+  settingDateField: (date) => `Setting date: ${date}`,
+  settingProject: (project) => `Setting project: ${project}`,
+  settingServiceType: (la) => `Setting service type: ${la}`,
+  settingHours: (hours) => `Setting hours: ${hours}`,
+  settingDescription: (text) => `Setting description: ${text}`,
 
   // Log (duplicate check)
   alreadyBooked: (hours, date, project) =>
     `${hours} already booked on ${date} for project ${project}`,
-  leistungsartLabel: "Service Type",
+  serviceTypeLabel: "Service Type",
   textLabel: "Text",
   promptUpdateOrNew: "Update existing or add new? [u/n] ",
   promptYes: "u",
@@ -314,13 +314,13 @@ const fr: Translations = {
   captchaRetry: "Captcha résolu. Nouvelle tentative...",
   sessionExpired: (url) =>
     `Session expirée ou page non chargée (URL: ${url}). Veuillez relancer 'abacus login'.`,
-  openingRapportierung: "Ouverture du menu Rapportierung...",
-  openingLeistungen: "Ouverture des Prestations...",
+  openingTimeTracking: "Ouverture du menu de suivi du temps...",
+  openingServices: "Ouverture des Prestations...",
 
   // Filters
-  settingAnsichtMonth: "Réglage de la vue sur Mois...",
-  settingAnsichtWeek: "Réglage de la vue sur Semaine...",
-  settingDatum: (date) => `Réglage de la date à ${date}...`,
+  settingViewMonth: "Réglage de la vue sur Mois...",
+  settingViewWeek: "Réglage de la vue sur Semaine...",
+  settingDate: (date) => `Réglage de la date à ${date}...`,
 
   // Grid reading
   readingEntries: "Lecture des entrées...",
@@ -329,9 +329,9 @@ const fr: Translations = {
   entriesTotal: (count) => `${count} entrées au total.`,
 
   // Status
-  readingRapportmatrix: "Lecture du rapport horaire...",
-  rapportmatrixNotFound: "Rapport horaire introuvable.",
-  rapportmatrixTitle: "Rapport horaire",
+  readingTimeReport: "Lecture du rapport horaire...",
+  timeReportNotFound: "Rapport horaire introuvable.",
+  timeReportTitle: "Rapport horaire",
   colDay: "Jour",
   colTotal: "Total",
   missingDays: (count, days) =>
@@ -340,23 +340,23 @@ const fr: Translations = {
   exampleLabel: "Exemple:",
 
   // Table headers
-  headerDatum: "Date",
-  headerProjekt: "Projet",
-  headerLeistungsart: "Type de prestation",
-  headerStunden: "Heures",
+  headerDate: "Date",
+  headerProject: "Projet",
+  headerServiceType: "Type de prestation",
+  headerHours: "Heures",
   headerText: "Texte",
 
   // Form filling
-  settingDatumField: (date) => `Réglage de la date: ${date}`,
-  settingProjekt: (project) => `Réglage du projet: ${project}`,
-  settingLeistungsart: (la) => `Réglage du type de prestation: ${la}`,
-  settingStunden: (hours) => `Réglage des heures: ${hours}`,
-  settingBuchungstext: (text) => `Réglage de la description: ${text}`,
+  settingDateField: (date) => `Réglage de la date: ${date}`,
+  settingProject: (project) => `Réglage du projet: ${project}`,
+  settingServiceType: (la) => `Réglage du type de prestation: ${la}`,
+  settingHours: (hours) => `Réglage des heures: ${hours}`,
+  settingDescription: (text) => `Réglage de la description: ${text}`,
 
   // Log (duplicate check)
   alreadyBooked: (hours, date, project) =>
     `${hours} déjà réservé le ${date} pour le projet ${project}`,
-  leistungsartLabel: "Type de prestation",
+  serviceTypeLabel: "Type de prestation",
   textLabel: "Texte",
   promptUpdateOrNew: "Mettre à jour l'existant ou en ajouter un nouveau? [m/n] ",
   promptYes: "m",
@@ -416,13 +416,13 @@ const it: Translations = {
   captchaRetry: "Captcha risolto. Nuovo tentativo...",
   sessionExpired: (url) =>
     `Sessione scaduta o pagina non caricata (URL: ${url}). Eseguire nuovamente 'abacus login'.`,
-  openingRapportierung: "Apertura del menu Rapportierung...",
-  openingLeistungen: "Apertura delle Prestazioni...",
+  openingTimeTracking: "Apertura del menu di monitoraggio del tempo...",
+  openingServices: "Apertura delle Prestazioni...",
 
   // Filters
-  settingAnsichtMonth: "Impostazione vista su Mese...",
-  settingAnsichtWeek: "Impostazione vista su Settimana...",
-  settingDatum: (date) => `Impostazione data a ${date}...`,
+  settingViewMonth: "Impostazione vista su Mese...",
+  settingViewWeek: "Impostazione vista su Settimana...",
+  settingDate: (date) => `Impostazione data a ${date}...`,
 
   // Grid reading
   readingEntries: "Lettura delle voci...",
@@ -431,9 +431,9 @@ const it: Translations = {
   entriesTotal: (count) => `${count} voci totali.`,
 
   // Status
-  readingRapportmatrix: "Lettura del rapporto orario...",
-  rapportmatrixNotFound: "Rapporto orario non trovato.",
-  rapportmatrixTitle: "Rapporto orario",
+  readingTimeReport: "Lettura del rapporto orario...",
+  timeReportNotFound: "Rapporto orario non trovato.",
+  timeReportTitle: "Rapporto orario",
   colDay: "Giorno",
   colTotal: "Totale",
   missingDays: (count, days) =>
@@ -442,23 +442,23 @@ const it: Translations = {
   exampleLabel: "Esempio:",
 
   // Table headers
-  headerDatum: "Data",
-  headerProjekt: "Progetto",
-  headerLeistungsart: "Tipo di prestazione",
-  headerStunden: "Ore",
+  headerDate: "Data",
+  headerProject: "Progetto",
+  headerServiceType: "Tipo di prestazione",
+  headerHours: "Ore",
   headerText: "Testo",
 
   // Form filling
-  settingDatumField: (date) => `Impostazione data: ${date}`,
-  settingProjekt: (project) => `Impostazione progetto: ${project}`,
-  settingLeistungsart: (la) => `Impostazione tipo di prestazione: ${la}`,
-  settingStunden: (hours) => `Impostazione ore: ${hours}`,
-  settingBuchungstext: (text) => `Impostazione descrizione: ${text}`,
+  settingDateField: (date) => `Impostazione data: ${date}`,
+  settingProject: (project) => `Impostazione progetto: ${project}`,
+  settingServiceType: (la) => `Impostazione tipo di prestazione: ${la}`,
+  settingHours: (hours) => `Impostazione ore: ${hours}`,
+  settingDescription: (text) => `Impostazione descrizione: ${text}`,
 
   // Log (duplicate check)
   alreadyBooked: (hours, date, project) =>
     `${hours} già prenotato il ${date} per il progetto ${project}`,
-  leistungsartLabel: "Tipo di prestazione",
+  serviceTypeLabel: "Tipo di prestazione",
   textLabel: "Testo",
   promptUpdateOrNew: "Aggiornare l'esistente o aggiungerne uno nuovo? [a/n] ",
   promptYes: "a",
@@ -518,13 +518,13 @@ const es: Translations = {
   captchaRetry: "Captcha resuelto. Reintentando...",
   sessionExpired: (url) =>
     `Sesión expirada o página no cargada (URL: ${url}). Ejecute 'abacus login' de nuevo.`,
-  openingRapportierung: "Abriendo menú Rapportierung...",
-  openingLeistungen: "Abriendo Servicios...",
+  openingTimeTracking: "Abriendo menú de seguimiento de tiempo...",
+  openingServices: "Abriendo Servicios...",
 
   // Filters
-  settingAnsichtMonth: "Configurando vista a Mes...",
-  settingAnsichtWeek: "Configurando vista a Semana...",
-  settingDatum: (date) => `Configurando fecha a ${date}...`,
+  settingViewMonth: "Configurando vista a Mes...",
+  settingViewWeek: "Configurando vista a Semana...",
+  settingDate: (date) => `Configurando fecha a ${date}...`,
 
   // Grid reading
   readingEntries: "Leyendo entradas...",
@@ -533,9 +533,9 @@ const es: Translations = {
   entriesTotal: (count) => `${count} entradas en total.`,
 
   // Status
-  readingRapportmatrix: "Leyendo informe horario...",
-  rapportmatrixNotFound: "Informe horario no encontrado.",
-  rapportmatrixTitle: "Informe horario",
+  readingTimeReport: "Leyendo informe horario...",
+  timeReportNotFound: "Informe horario no encontrado.",
+  timeReportTitle: "Informe horario",
   colDay: "Día",
   colTotal: "Total",
   missingDays: (count, days) =>
@@ -544,23 +544,23 @@ const es: Translations = {
   exampleLabel: "Ejemplo:",
 
   // Table headers
-  headerDatum: "Fecha",
-  headerProjekt: "Proyecto",
-  headerLeistungsart: "Tipo de servicio",
-  headerStunden: "Horas",
+  headerDate: "Fecha",
+  headerProject: "Proyecto",
+  headerServiceType: "Tipo de servicio",
+  headerHours: "Horas",
   headerText: "Texto",
 
   // Form filling
-  settingDatumField: (date) => `Configurando fecha: ${date}`,
-  settingProjekt: (project) => `Configurando proyecto: ${project}`,
-  settingLeistungsart: (la) => `Configurando tipo de servicio: ${la}`,
-  settingStunden: (hours) => `Configurando horas: ${hours}`,
-  settingBuchungstext: (text) => `Configurando descripción: ${text}`,
+  settingDateField: (date) => `Configurando fecha: ${date}`,
+  settingProject: (project) => `Configurando proyecto: ${project}`,
+  settingServiceType: (la) => `Configurando tipo de servicio: ${la}`,
+  settingHours: (hours) => `Configurando horas: ${hours}`,
+  settingDescription: (text) => `Configurando descripción: ${text}`,
 
   // Log (duplicate check)
   alreadyBooked: (hours, date, project) =>
     `${hours} ya reservado el ${date} para el proyecto ${project}`,
-  leistungsartLabel: "Tipo de servicio",
+  serviceTypeLabel: "Tipo de servicio",
   textLabel: "Texto",
   promptUpdateOrNew: "¿Actualizar existente o añadir nuevo? [a/n] ",
   promptYes: "a",

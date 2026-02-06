@@ -2,14 +2,14 @@ import { Command } from "commander";
 import { logTime, listTime, deleteTime, statusTime } from "../api";
 import { t } from "../i18n";
 import { bold, highlight, info, err, fail } from "../ui";
-import { loadAliases, resolveProject, resolveLeistungsart, promptSelect } from "../aliases";
+import { loadAliases, resolveProject, resolveServiceType, promptSelect } from "../aliases";
 
 export function registerTimeCommands(program: Command): void {
   const time = program.command("time").description("Time tracking commands");
 
   time
     .command("status")
-    .description("Show Rapportmatrix (time account status) for a week")
+    .description("Show time report for a week")
     .option("--date <YYYY-MM-DD>", "Date within the target week (default: today)")
     .action(async (options) => {
       const date = options.date || new Date().toISOString().split("T")[0];
@@ -44,8 +44,8 @@ export function registerTimeCommands(program: Command): void {
     .description("Log a time entry")
     .option("--project <name>", "Project number or alias")
     .requiredOption("--hours <n>", "Number of hours", parseFloat)
-    .option("--leistungsart <name>", "Leistungsart / service type (default: 1435)")
-    .requiredOption("--text <text>", "Buchungstext / description")
+    .option("--service-type <name>", "Service type (default: 1435)")
+    .requiredOption("--text <text>", "Description")
     .option("--date <YYYY-MM-DD>", "Date (default: today)")
     .action(async (options) => {
       const date = options.date || new Date().toISOString().split("T")[0];
@@ -60,20 +60,20 @@ export function registerTimeCommands(program: Command): void {
           project = await promptSelect("project", aliases.projects);
         }
 
-        // Interactive leistungsart selection if not provided
-        let leistungsart: string;
-        if (options.leistungsart) {
-          leistungsart = resolveLeistungsart(options.leistungsart);
-        } else if (Object.keys(aliases.leistungsarten).length > 0) {
-          leistungsart = await promptSelect("leistungsart", aliases.leistungsarten);
+        // Interactive service type selection if not provided
+        let serviceType: string;
+        if (options.serviceType) {
+          serviceType = resolveServiceType(options.serviceType);
+        } else if (Object.keys(aliases.serviceTypes).length > 0) {
+          serviceType = await promptSelect("service-type", aliases.serviceTypes);
         } else {
-          leistungsart = "1435";
+          serviceType = "1435";
         }
 
         console.log("");
         console.log(bold(t().timeEntryLabel));
         console.log(`  ${bold("Project:")}       ${highlight(project)}`);
-        console.log(`  ${bold(t().leistungsartLabel + ":")}  ${highlight(leistungsart)}`);
+        console.log(`  ${bold(t().serviceTypeLabel + ":")}  ${highlight(serviceType)}`);
         console.log(`  ${bold("Hours:")}         ${highlight(String(options.hours))}`);
         console.log(`  ${bold("Date:")}          ${highlight(date)}`);
         if (options.text) console.log(`  ${bold(t().textLabel + ":")}  ${highlight(options.text)}`);
@@ -81,10 +81,10 @@ export function registerTimeCommands(program: Command): void {
 
         await logTime({
           project,
-          leistungsart,
+          serviceType,
           hours: options.hours,
           date,
-          buchungstext: options.text || "",
+          description: options.text || "",
         });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);

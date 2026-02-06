@@ -23,7 +23,7 @@ No test framework or linter is configured.
 ```bash
 abacus login                          # Opens browser for manual login, saves session
 abacus discover                       # Captures network requests for API exploration
-abacus time log --project <id> --hours <n> [--leistungsart <id>] [--text <text>] [--date <YYYY-MM-DD>]
+abacus time log --project <id> --hours <n> [--service-type <id>] [--text <text>] [--date <YYYY-MM-DD>]
 ```
 
 ## Architecture

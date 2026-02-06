@@ -28,18 +28,18 @@ async function withCaptchaRetry<T>(fn: () => Promise<T>): Promise<T> {
 
 export interface TimeEntry {
   project: string;
-  leistungsart: string;
+  serviceType: string;
   hours: number;
   date: string; // YYYY-MM-DD
-  buchungstext: string;
+  description: string;
 }
 
 export interface ExistingEntry {
-  datum: string;
-  projekt: string;
-  leistungsart: string;
+  date: string;
+  project: string;
+  serviceType: string;
   text: string;
-  anzahl: string;
+  hours: string;
   status: string;
   rowIndex: number;
 }
@@ -113,7 +113,7 @@ async function initLocale(page: Page): Promise<void> {
   }
 }
 
-/** Navigate to Leistungen page via Rapportierung menu. */
+/** Navigate to the services (Leistungen) page via the time tracking menu. */
 async function navigateToLeistungen(page: Page): Promise<void> {
   spin(t().navigatingToPortal);
   await page.goto(config.abacusUrl, { waitUntil: "networkidle" });
@@ -187,14 +187,14 @@ async function navigateToLeistungen(page: Page): Promise<void> {
   // Auto-detect locale after page loads and before navigating further
   await initLocale(page);
 
-  spin(t().openingRapportierung);
+  spin(t().openingTimeTracking);
   const isExpanded = await rapportierungToggle.getAttribute("aria-expanded");
   if (isExpanded !== "true") {
     await rapportierungToggle.click();
     await waitForVaadin(page);
   }
 
-  spin(t().openingLeistungen);
+  spin(t().openingServices);
   await page.locator('a[href^="proj_services"]').click();
   await waitForVaadin(page);
 }
@@ -204,15 +204,15 @@ async function navigateToLeistungen(page: Page): Promise<void> {
  * @param monthYear — format "MM.YYYY" e.g. "01.2025"
  */
 async function setMonthFilter(page: Page, monthYear: string): Promise<void> {
-  // Set Ansicht to "Monat" (position 3 in dropdown)
-  spin(t().settingAnsichtMonth);
+  // Set view to "Month" (position 3 in dropdown)
+  spin(t().settingViewMonth);
   await selectComboboxByIndex(page, "cmbDateRange", 3);
 
   // Set Datum to the first day of the requested month
   const [mm, yyyy] = monthYear.split(".");
   const formattedDate = `01.${mm}.${yyyy}`;
 
-  spin(t().settingDatum(formattedDate));
+  spin(t().settingDate(formattedDate));
   const datePicker = page.locator("vaadin-date-picker#dateField");
   const input = datePicker.locator("input");
 
@@ -242,7 +242,7 @@ async function readGridEntries(page: Page): Promise<ExistingEntry[]> {
     if (!tbody) return [];
 
     const rows = Array.from(tbody.querySelectorAll("tr"));
-    const results: { card: string[]; text: string; anzahl: string; status: string }[] = [];
+    const results: { card: string[]; text: string; hours: string; status: string }[] = [];
 
     for (const row of rows) {
       const cells = Array.from(row.querySelectorAll("td"));
@@ -255,7 +255,7 @@ async function readGridEntries(page: Page): Promise<ExistingEntry[]> {
         return assigned.length > 0 ? assigned[0] : null;
       };
 
-      // Cell 0: card with date + project + leistungsart as separate child elements
+      // Cell 0: card with date + project + service type as separate child elements
       const cardEl = getSlotContent(0);
       const card: string[] = [];
       if (cardEl) {
@@ -271,34 +271,34 @@ async function readGridEntries(page: Page): Promise<ExistingEntry[]> {
         }
       }
 
-      // Cell 1: buchungstext
+      // Cell 1: description/text
       const textEl = getSlotContent(1);
       const text = textEl?.textContent?.trim() || "";
 
-      // Cell 2: anzahl/hours
-      const anzahlEl = getSlotContent(2);
-      const anzahl = anzahlEl?.textContent?.trim() || "";
+      // Cell 2: hours
+      const hoursEl = getSlotContent(2);
+      const hours = hoursEl?.textContent?.trim() || "";
 
       // Cell 3: status
       const statusEl = getSlotContent(3);
       const status = statusEl?.textContent?.trim() || "";
 
       // Skip empty rows
-      if (card.length === 0 && !text && !anzahl) continue;
+      if (card.length === 0 && !text && !hours) continue;
 
-      results.push({ card, text, anzahl, status });
+      results.push({ card, text, hours, status });
     }
 
     return results;
   });
 
   return raw.map((r, i) => ({
-    // Card parts: [0]=date, [1]=project, [2]=leistungsart
-    datum: r.card[0] || "",
-    projekt: r.card[1] || "",
-    leistungsart: r.card[2] || "",
+    // Card parts: [0]=date, [1]=project, [2]=serviceType
+    date: r.card[0] || "",
+    project: r.card[1] || "",
+    serviceType: r.card[2] || "",
     text: r.text,
-    anzahl: r.anzahl,
+    hours: r.hours,
     status: r.status,
     rowIndex: i,
   }));
@@ -336,7 +336,7 @@ async function clickRow(page: Page, rowIndex: number): Promise<void> {
 async function fillForm(page: Page, entry: TimeEntry): Promise<void> {
   // Datum (movie-id="ProjDat")
   const formattedDate = formatDate(entry.date);
-  spin(t().settingDatumField(formattedDate));
+  spin(t().settingDateField(formattedDate));
   const dateInput = page.locator('vaadin-date-picker[movie-id="ProjDat"] input');
   await dateInput.click({ clickCount: 3 });
   await page.keyboard.press("Backspace");
@@ -345,19 +345,19 @@ async function fillForm(page: Page, entry: TimeEntry): Promise<void> {
   await waitForVaadin(page);
 
   // Projekt-Nr. (movie-id="ProjNr2")
-  spin(t().settingProjekt(entry.project));
+  spin(t().settingProject(entry.project));
   await fillCombobox(page, "ProjNr2", entry.project);
 
-  // Leistungsart (movie-id="LeArtNr") — appears after project selection
-  spin(t().settingLeistungsart(entry.leistungsart));
-  const leistungsartCombo = page.locator(
+  // Service type (movie-id="LeArtNr") — appears after project selection
+  spin(t().settingServiceType(entry.serviceType));
+  const serviceTypeCombo = page.locator(
     'vaadin-combo-box[movie-id="LeArtNr"]'
   );
-  await leistungsartCombo.waitFor({ state: "visible", timeout: 10_000 });
-  await fillCombobox(page, "LeArtNr", entry.leistungsart);
+  await serviceTypeCombo.waitFor({ state: "visible", timeout: 10_000 });
+  await fillCombobox(page, "LeArtNr", entry.serviceType);
 
-  // Stunden (movie-id="Menge")
-  spin(t().settingStunden(entry.hours));
+  // Hours (movie-id="Menge")
+  spin(t().settingHours(entry.hours));
   const hoursField = page.locator(
     'vaadin-text-field[movie-id="Menge"] input'
   );
@@ -367,15 +367,15 @@ async function fillForm(page: Page, entry: TimeEntry): Promise<void> {
   await hoursField.fill(String(entry.hours));
   await waitForVaadin(page);
 
-  // Buchungstext (movie-id="Text")
-  if (entry.buchungstext) {
-    spin(t().settingBuchungstext(entry.buchungstext));
-    const buchungstext = page.locator(
+  // Description (movie-id="Text")
+  if (entry.description) {
+    spin(t().settingDescription(entry.description));
+    const descriptionField = page.locator(
       'vaadin-text-field[movie-id="Text"] input'
     );
-    await buchungstext.click({ clickCount: 3 });
+    await descriptionField.click({ clickCount: 3 });
     await page.keyboard.press("Backspace");
-    await buchungstext.fill(entry.buchungstext);
+    await descriptionField.fill(entry.description);
     await waitForVaadin(page);
   }
 }
@@ -436,11 +436,11 @@ function toMonthYear(date: string): string {
  * @param date — format "YYYY-MM-DD"
  */
 async function setWeekFilter(page: Page, date: string): Promise<void> {
-  spin(t().settingAnsichtWeek);
+  spin(t().settingViewWeek);
   await selectComboboxByIndex(page, "cmbDateRange", 2);
 
   const formattedDate = formatDate(date);
-  spin(t().settingDatum(formattedDate));
+  spin(t().settingDate(formattedDate));
   const datePicker = page.locator("vaadin-date-picker#dateField");
   const input = datePicker.locator("input");
 
@@ -453,7 +453,7 @@ async function setWeekFilter(page: Page, date: string): Promise<void> {
 }
 
 /**
- * Show the Rapportmatrix (time account status) for the week containing the given date.
+ * Show the time report (weekly status) for the week containing the given date.
  * @param date — format "YYYY-MM-DD", defaults to today
  */
 export async function statusTime(date: string): Promise<void> {
@@ -465,7 +465,7 @@ export async function statusTime(date: string): Promise<void> {
     await navigateToLeistungen(page);
     await setWeekFilter(page, date);
 
-    spin(t().readingRapportmatrix);
+    spin(t().readingTimeReport);
 
     const rows = await page.evaluate(() => {
       const panel = document.querySelector(
@@ -499,14 +499,14 @@ export async function statusTime(date: string): Promise<void> {
     });
 
     if (rows.length === 0) {
-      fail(err(t().rapportmatrixNotFound));
+      fail(err(t().timeReportNotFound));
       return;
     }
 
     stopSpinner();
 
     const table = new Table({
-      head: [t().rapportmatrixTitle, t().colDay, t().colTotal],
+      head: [t().timeReportTitle, t().colDay, t().colTotal],
       style: { head: ["cyan"] },
     });
 
@@ -537,7 +537,7 @@ export async function statusTime(date: string): Promise<void> {
       const dow = d.getDay();
       if (dow === 0 || dow === 6) continue; // skip weekends
       const dStr = formatDate(d.toISOString().split("T")[0]);
-      const hasEntry = entries.some((e) => e.datum === dStr);
+      const hasEntry = entries.some((e) => e.date === dStr);
       if (!hasEntry) {
         missingDaysList.push(dStr);
       }
@@ -561,14 +561,14 @@ export async function statusTime(date: string): Promise<void> {
         const lastEntry = entries[entries.length - 1];
         if (lastEntry) {
           // Extract project number (before the dot)
-          const projektNr = lastEntry.projekt.split(".")[0].trim();
-          // Extract leistungsart number
-          const leistungsartNr = lastEntry.leistungsart.split(".")[0].trim();
+          const projectNr = lastEntry.project.split(".")[0].trim();
+          // Extract service type number
+          const serviceTypeNr = lastEntry.serviceType.split(".")[0].trim();
           const hours = Math.min(missing, 8);
           console.log("");
           console.log(bold(t().exampleLabel));
           console.log(
-            dim(`  npx abacus time log --project ${projektNr} --hours ${hours.toFixed(2)} --leistungsart ${leistungsartNr} --text "${lastEntry.text || "..."}" --date ${missingDaysList.length > 0 ? missingDaysList[0].split(".").reverse().join("-") : date}`)
+            dim(`  npx abacus time log --project ${projectNr} --hours ${hours.toFixed(2)} --service-type ${serviceTypeNr} --text "${lastEntry.text || "..."}" --date ${missingDaysList.length > 0 ? missingDaysList[0].split(".").reverse().join("-") : date}`)
           );
         }
       }
@@ -621,21 +621,21 @@ export async function listTime(monthYear: string): Promise<void> {
       weekdays.push(`${dd}.${mmStr}.${d.getFullYear()}`);
     }
 
-    // Group entries by datum
+    // Group entries by date
     const entriesByDate = new Map<string, ExistingEntry[]>();
     for (const e of entries) {
-      const list = entriesByDate.get(e.datum) || [];
+      const list = entriesByDate.get(e.date) || [];
       list.push(e);
-      entriesByDate.set(e.datum, list);
+      entriesByDate.set(e.date, list);
     }
 
     // Build table with missing-day warnings interleaved
     const table = new Table({
       head: [
-        t().headerDatum,
-        t().headerProjekt,
-        t().headerLeistungsart,
-        t().headerStunden,
+        t().headerDate,
+        t().headerProject,
+        t().headerServiceType,
+        t().headerHours,
         t().headerText,
       ],
       style: { head: ["cyan"] },
@@ -649,7 +649,7 @@ export async function listTime(monthYear: string): Promise<void> {
       datesRendered.add(day);
       if (dayEntries && dayEntries.length > 0) {
         for (const e of dayEntries) {
-          table.push([e.datum, e.projekt, e.leistungsart, e.anzahl, e.text]);
+          table.push([e.date, e.project, e.serviceType, e.hours, e.text]);
         }
       } else {
         missingCount++;
@@ -665,9 +665,9 @@ export async function listTime(monthYear: string): Promise<void> {
 
     // Append entries with dates outside the weekday range (e.g. weekend entries)
     for (const e of entries) {
-      if (!datesRendered.has(e.datum)) {
-        table.push([e.datum, e.projekt, e.leistungsart, e.anzahl, e.text]);
-        datesRendered.add(e.datum);
+      if (!datesRendered.has(e.date)) {
+        table.push([e.date, e.project, e.serviceType, e.hours, e.text]);
+        datesRendered.add(e.date);
       }
     }
 
@@ -702,14 +702,14 @@ export async function logTime(entry: TimeEntry): Promise<void> {
     const allEntries = await readGridEntries(page);
     const targetDate = formatDate(entry.date);
     const match = allEntries.find(
-      (e) => e.datum === targetDate && e.projekt.includes(entry.project)
+      (e) => e.date === targetDate && e.project.includes(entry.project)
     );
 
     if (match) {
       stopSpinner();
       console.log("");
-      console.log(warn(t().alreadyBooked(match.anzahl, match.datum, match.projekt)));
-      console.log(`  ${t().leistungsartLabel}: ${match.leistungsart}`);
+      console.log(warn(t().alreadyBooked(match.hours, match.date, match.project)));
+      console.log(`  ${t().serviceTypeLabel}: ${match.serviceType}`);
       if (match.text) console.log(`  ${t().textLabel}: ${match.text}`);
       console.log("");
 
@@ -794,7 +794,7 @@ export async function deleteTime(
     const allEntries = await readGridEntries(page);
     const targetDate = formatDate(date);
     const matches = allEntries.filter(
-      (e) => e.datum === targetDate && e.projekt.includes(project)
+      (e) => e.date === targetDate && e.project.includes(project)
     );
 
     if (matches.length === 0) {
@@ -808,8 +808,8 @@ export async function deleteTime(
     if (matches.length === 1) {
       match = matches[0];
       stopSpinner();
-      console.log(t().foundEntry(match.anzahl, match.datum, match.projekt));
-      console.log(`  ${t().leistungsartLabel}: ${match.leistungsart}`);
+      console.log(t().foundEntry(match.hours, match.date, match.project));
+      console.log(`  ${t().serviceTypeLabel}: ${match.serviceType}`);
       if (match.text) console.log(`  ${t().textLabel}: ${match.text}`);
       console.log("");
 
@@ -825,7 +825,7 @@ export async function deleteTime(
       for (let i = 0; i < matches.length; i++) {
         const m = matches[i];
         console.log(
-          `  [${i + 1}] ${m.anzahl}  ${m.leistungsart}  ${m.text || t().noText}`
+          `  [${i + 1}] ${m.hours}  ${m.serviceType}  ${m.text || t().noText}`
         );
       }
       console.log("");
