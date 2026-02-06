@@ -7,6 +7,7 @@ import Table from "cli-table3";
 import { createAuthenticatedContext } from "./auth";
 import { config } from "./config";
 import { t, detectLocale, setLocale, confirmDeleteKey, Locale } from "./i18n";
+import * as fs from "fs";
 import chalk from "chalk";
 import {
   success, err, warn, info, bold, highlight, dim,
@@ -398,6 +399,15 @@ async function deleteSidePanelEntry(page: Page): Promise<void> {
   await confirmBtn.waitFor({ state: "visible", timeout: 10_000 });
   await confirmBtn.click();
   await waitForVaadin(page);
+}
+
+/** Close the side panel if it's currently open. */
+async function closeSidePanelIfOpen(page: Page): Promise<void> {
+  const panel = page.locator('va-side-panel[movie-id="id_editRecordSidePanel"]');
+  if (await panel.isVisible().catch(() => false)) {
+    await page.locator('vaadin-button[movie-id="sidepanel_btnClose"]').click();
+    await waitForVaadin(page);
+  }
 }
 
 /** Prompt the user for input in the terminal. */
@@ -861,6 +871,177 @@ export async function deleteTime(
     await deleteSidePanelEntry(page);
 
     succeed(success(t().entryDeleted));
+  } finally {
+    await close();
+  }
+  });
+}
+
+/**
+ * Log multiple time entries in a single browser session.
+ * Groups entries by month, checks for duplicates, and creates entries sequentially.
+ */
+export async function batchLogTime(entries: TimeEntry[]): Promise<void> {
+  return withCaptchaRetry(async () => {
+  const { context, close } = await createAuthenticatedContext();
+
+  try {
+    const page = await context.newPage();
+    await navigateToLeistungen(page);
+
+    // Group entries by month
+    const byMonth = new Map<string, TimeEntry[]>();
+    for (const entry of entries) {
+      const key = toMonthYear(entry.date);
+      const list = byMonth.get(key) || [];
+      list.push(entry);
+      byMonth.set(key, list);
+    }
+
+    let created = 0;
+    let skipped = 0;
+    let entryIndex = 0;
+
+    for (const [monthYear, monthEntries] of byMonth) {
+      await setMonthFilter(page, monthYear);
+
+      spin(t().readingExistingEntries);
+      const existing = await readGridEntries(page);
+
+      for (const entry of monthEntries) {
+        entryIndex++;
+        const targetDate = formatDate(entry.date);
+
+        // Check for duplicate (same date + project)
+        const isDuplicate = existing.some(
+          (e) => e.date === targetDate && e.project.includes(entry.project)
+        );
+
+        if (isDuplicate) {
+          stopSpinner();
+          console.log(warn(t().batchSkipping(targetDate, entry.project)));
+          skipped++;
+          continue;
+        }
+
+        spin(t().batchCreating(entryIndex, entries.length, targetDate));
+
+        await page.locator('vaadin-button[movie-id="mainAction"]').click();
+        await waitForVaadin(page);
+        await page
+          .locator('vaadin-combo-box[movie-id="ProjNr2"]')
+          .waitFor({ state: "visible", timeout: 10_000 });
+
+        await fillForm(page, entry);
+
+        // Blur to commit pending values
+        await page.keyboard.press("Tab");
+        await waitForVaadin(page);
+
+        // Save
+        const saveBtn = page.locator('vaadin-button[movie-id="btnSave"]');
+        const dialogSaveBtn = page.locator('vaadin-button[movie-id="btnPrimary"]');
+
+        if (await saveBtn.isVisible().catch(() => false)) {
+          await saveBtn.click();
+        } else if (await dialogSaveBtn.isVisible().catch(() => false)) {
+          await dialogSaveBtn.click();
+        } else {
+          fail(err(t().saveButtonNotFound));
+          return;
+        }
+        await waitForVaadin(page);
+        await page.waitForTimeout(1000);
+
+        await closeSidePanelIfOpen(page);
+        created++;
+      }
+    }
+
+    stopSpinner();
+    succeed(success(t().batchSummary(created, skipped)));
+  } finally {
+    await close();
+  }
+  });
+}
+
+/**
+ * Generate a batch template file with missing weekdays pre-filled with defaults.
+ */
+export async function generateBatchFile(
+  from: string,
+  to: string,
+  outPath: string
+): Promise<void> {
+  return withCaptchaRetry(async () => {
+  const { context, close } = await createAuthenticatedContext();
+
+  try {
+    const page = await context.newPage();
+    await navigateToLeistungen(page);
+
+    // Collect existing entries across months in the range
+    const allExisting: ExistingEntry[] = [];
+    const months = new Set<string>();
+    const startDate = new Date(from);
+    const endDate = new Date(to);
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      months.add(toMonthYear(d.toISOString().split("T")[0]));
+    }
+
+    for (const monthYear of months) {
+      await setMonthFilter(page, monthYear);
+      spin(t().readingEntries);
+      const entries = await readGridEntries(page);
+      allExisting.push(...entries);
+    }
+
+    // Find weekdays with no entries
+    const missing: string[] = [];
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue;
+      const dateStr = d.toISOString().split("T")[0];
+      const formatted = formatDate(dateStr);
+      const hasEntry = allExisting.some((e) => e.date === formatted);
+      if (!hasEntry) {
+        missing.push(dateStr);
+      }
+    }
+
+    stopSpinner();
+
+    if (missing.length === 0) {
+      console.log(info(t().batchNoEntries));
+      return;
+    }
+
+    // Pick defaults from the last existing entry
+    let defaultProject = "";
+    let defaultServiceType = "";
+    let defaultHours = 8;
+    let defaultText = "";
+    if (allExisting.length > 0) {
+      const last = allExisting[allExisting.length - 1];
+      defaultProject = last.project.trim();
+      defaultServiceType = last.serviceType.trim();
+      defaultText = last.text.trim();
+      const parsed = parseFloat(last.hours.replace(",", "."));
+      if (!isNaN(parsed)) defaultHours = parsed;
+    }
+
+    const template = missing.map((date) => ({
+      date,
+      project: defaultProject,
+      serviceType: defaultServiceType,
+      hours: defaultHours,
+      text: defaultText,
+    }));
+
+    fs.writeFileSync(outPath, JSON.stringify(template, null, 2) + "\n");
+    succeed(success(t().batchGenerated(outPath, missing.length)));
+    console.log(info(t().batchGenerateHint(outPath)));
   } finally {
     await close();
   }

@@ -71,6 +71,69 @@ Shows the time report (weekly summary) for the week containing the given date, p
 npx abacus time status --date 2025-01-15
 ```
 
+### Batch create entries
+
+Create multiple time entries in a single browser session — much faster than running `time log` repeatedly.
+
+**Range fill** (default) — fills all weekdays in a date range:
+
+```bash
+# Fill current week (Mon-Fri)
+npx abacus time batch --project 71100000001 --hours 8 --service-type 1435 --text "Development"
+
+# Fill specific date range
+npx abacus time batch --from 2026-01-26 --to 2026-01-30 --project 71100000001 --hours 8 --text "Dev"
+
+# Preview what would be created
+npx abacus time batch --project 71100000001 --hours 8 --text "Dev" --dry-run
+```
+
+**Generate template** — finds missing days and writes a pre-filled file:
+
+```bash
+npx abacus time batch --generate
+npx abacus time batch --generate --from 2026-01-26 --to 2026-01-30 --out entries.json
+# Edit the file, then import it
+npx abacus time batch --file entries.json
+```
+
+**File import** — create entries from a JSON or CSV file:
+
+```bash
+npx abacus time batch --file entries.json
+npx abacus time batch --file entries.csv
+npx abacus time batch --file entries.json --include-weekends
+```
+
+JSON format:
+```json
+[
+  { "date": "2026-02-02", "project": "71100000001", "serviceType": "1435", "hours": 8, "text": "Development" }
+]
+```
+
+CSV format:
+```
+date,project,serviceType,hours,text
+2026-02-02,71100000001,1435,8,Development
+```
+
+| Flag | Description |
+|------|-------------|
+| `--project <id>` | Project number or alias (required for range fill) |
+| `--hours <n>` | Hours per entry (required for range fill) |
+| `--service-type <id>` | Service type (default: 1435) |
+| `--text <text>` | Description |
+| `--from <YYYY-MM-DD>` | Start date (default: Monday of current week) |
+| `--to <YYYY-MM-DD>` | End date (default: Friday of current week) |
+| `--file <path>` | Import from JSON or CSV file |
+| `--generate` | Generate template file with missing days |
+| `--out <path>` | Output path for `--generate` (default: batch.json) |
+| `--dry-run` | Preview entries without creating them |
+| `--include-weekends` | Allow weekend dates from file import |
+
+Duplicate detection: entries with the same date + project as an existing entry are automatically skipped.
+
 ### Delete an entry
 
 ```bash

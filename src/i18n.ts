@@ -92,6 +92,18 @@ export interface Translations {
   listingEntries: (monthYear: string) => string;
   deletingEntryFor: (date: string, project: string) => string;
   timeEntryLabel: string;
+
+  // --- CLI output: batch ---
+  batchCreating: (current: number, total: number, date: string) => string;
+  batchSkipping: (date: string, project: string) => string;
+  batchSummary: (created: number, skipped: number) => string;
+  batchDryRun: string;
+  batchNoEntries: string;
+  batchWeekendSkipped: (date: string) => string;
+  batchFileNotFound: (path: string) => string;
+  batchInvalidFormat: string;
+  batchGenerated: (path: string, count: number) => string;
+  batchGenerateHint: (path: string) => string;
 }
 
 const de: Translations = {
@@ -194,6 +206,18 @@ const de: Translations = {
   deletingEntryFor: (date, project) =>
     `Deleting entry for ${date} / ${project}...`,
   timeEntryLabel: "Time entry:",
+
+  // Batch
+  batchCreating: (current, total, date) => `[${current}/${total}] Eintrag für ${date} wird erstellt...`,
+  batchSkipping: (date, project) => `Übersprungen: ${date} — ${project} (bereits vorhanden)`,
+  batchSummary: (created, skipped) => `${created} Einträge erstellt, ${skipped} übersprungen.`,
+  batchDryRun: "Vorschau (dry-run):",
+  batchNoEntries: "Keine Einträge zu erstellen.",
+  batchWeekendSkipped: (date) => `Übersprungen: ${date} (Wochenende)`,
+  batchFileNotFound: (path) => `Datei nicht gefunden: ${path}`,
+  batchInvalidFormat: "Ungültiges Dateiformat. Erwartet: .json oder .csv",
+  batchGenerated: (path, count) => `${path} mit ${count} fehlenden Tagen generiert.`,
+  batchGenerateHint: (path) => `Datei bearbeiten, dann ausführen: abacus time batch --file ${path}`,
 };
 
 const en: Translations = {
@@ -296,6 +320,18 @@ const en: Translations = {
   deletingEntryFor: (date, project) =>
     `Deleting entry for ${date} / ${project}...`,
   timeEntryLabel: "Time entry:",
+
+  // Batch
+  batchCreating: (current, total, date) => `[${current}/${total}] Creating entry for ${date}...`,
+  batchSkipping: (date, project) => `Skipped: ${date} — ${project} (already exists)`,
+  batchSummary: (created, skipped) => `${created} entries created, ${skipped} skipped.`,
+  batchDryRun: "Preview (dry-run):",
+  batchNoEntries: "No entries to create.",
+  batchWeekendSkipped: (date) => `Skipped: ${date} (weekend)`,
+  batchFileNotFound: (path) => `File not found: ${path}`,
+  batchInvalidFormat: "Invalid file format. Expected: .json or .csv",
+  batchGenerated: (path, count) => `Generated ${path} with ${count} missing days.`,
+  batchGenerateHint: (path) => `Edit the file, then run: abacus time batch --file ${path}`,
 };
 
 const fr: Translations = {
@@ -398,6 +434,18 @@ const fr: Translations = {
   deletingEntryFor: (date, project) =>
     `Suppression de l'entrée pour ${date} / ${project}...`,
   timeEntryLabel: "Entrée horaire:",
+
+  // Batch
+  batchCreating: (current, total, date) => `[${current}/${total}] Création de l'entrée pour ${date}...`,
+  batchSkipping: (date, project) => `Ignoré: ${date} — ${project} (existe déjà)`,
+  batchSummary: (created, skipped) => `${created} entrées créées, ${skipped} ignorées.`,
+  batchDryRun: "Aperçu (dry-run):",
+  batchNoEntries: "Aucune entrée à créer.",
+  batchWeekendSkipped: (date) => `Ignoré: ${date} (week-end)`,
+  batchFileNotFound: (path) => `Fichier introuvable: ${path}`,
+  batchInvalidFormat: "Format de fichier invalide. Attendu: .json ou .csv",
+  batchGenerated: (path, count) => `${path} généré avec ${count} jours manquants.`,
+  batchGenerateHint: (path) => `Modifiez le fichier, puis exécutez: abacus time batch --file ${path}`,
 };
 
 const it: Translations = {
@@ -500,6 +548,18 @@ const it: Translations = {
   deletingEntryFor: (date, project) =>
     `Eliminazione voce per ${date} / ${project}...`,
   timeEntryLabel: "Voce oraria:",
+
+  // Batch
+  batchCreating: (current, total, date) => `[${current}/${total}] Creazione voce per ${date}...`,
+  batchSkipping: (date, project) => `Ignorato: ${date} — ${project} (esiste già)`,
+  batchSummary: (created, skipped) => `${created} voci create, ${skipped} ignorate.`,
+  batchDryRun: "Anteprima (dry-run):",
+  batchNoEntries: "Nessuna voce da creare.",
+  batchWeekendSkipped: (date) => `Ignorato: ${date} (fine settimana)`,
+  batchFileNotFound: (path) => `File non trovato: ${path}`,
+  batchInvalidFormat: "Formato file non valido. Atteso: .json o .csv",
+  batchGenerated: (path, count) => `${path} generato con ${count} giorni mancanti.`,
+  batchGenerateHint: (path) => `Modifica il file, poi esegui: abacus time batch --file ${path}`,
 };
 
 const es: Translations = {
@@ -602,6 +662,18 @@ const es: Translations = {
   deletingEntryFor: (date, project) =>
     `Eliminando entrada para ${date} / ${project}...`,
   timeEntryLabel: "Entrada horaria:",
+
+  // Batch
+  batchCreating: (current, total, date) => `[${current}/${total}] Creando entrada para ${date}...`,
+  batchSkipping: (date, project) => `Omitido: ${date} — ${project} (ya existe)`,
+  batchSummary: (created, skipped) => `${created} entradas creadas, ${skipped} omitidas.`,
+  batchDryRun: "Vista previa (dry-run):",
+  batchNoEntries: "No hay entradas que crear.",
+  batchWeekendSkipped: (date) => `Omitido: ${date} (fin de semana)`,
+  batchFileNotFound: (path) => `Archivo no encontrado: ${path}`,
+  batchInvalidFormat: "Formato de archivo inválido. Esperado: .json o .csv",
+  batchGenerated: (path, count) => `${path} generado con ${count} días faltantes.`,
+  batchGenerateHint: (path) => `Edite el archivo, luego ejecute: abacus time batch --file ${path}`,
 };
 
 const locales: Record<Locale, Translations> = { de, en, fr, it, es };

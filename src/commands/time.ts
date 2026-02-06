@@ -1,7 +1,10 @@
 import { Command } from "commander";
-import { logTime, listTime, deleteTime, statusTime } from "../api";
+import * as fs from "fs";
+import * as path from "path";
+import Table from "cli-table3";
+import { logTime, listTime, deleteTime, statusTime, batchLogTime, generateBatchFile, TimeEntry } from "../api";
 import { t } from "../i18n";
-import { bold, highlight, info, err, fail } from "../ui";
+import { bold, highlight, info, warn, err, fail } from "../ui";
 import { loadAliases, resolveProject, resolveServiceType, promptSelect } from "../aliases";
 
 export function registerTimeCommands(program: Command): void {
@@ -119,4 +122,213 @@ export function registerTimeCommands(program: Command): void {
         process.exit(1);
       }
     });
+
+  time
+    .command("batch")
+    .description("Create multiple time entries in a single browser session")
+    .option("--project <name>", "Project number or alias")
+    .option("--hours <n>", "Hours per entry", parseFloat)
+    .option("--service-type <name>", "Service type (default: 1435)")
+    .option("--text <text>", "Description for all entries")
+    .option("--from <YYYY-MM-DD>", "Start date (default: Monday of current week)")
+    .option("--to <YYYY-MM-DD>", "End date (default: Friday of current week)")
+    .option("--file <path>", "Import entries from a JSON or CSV file")
+    .option("--generate", "Generate a template file with missing days")
+    .option("--out <path>", "Output path for --generate (default: batch.json)")
+    .option("--dry-run", "Preview entries without creating them")
+    .option("--include-weekends", "Allow weekend dates from file import")
+    .action(async (options) => {
+      try {
+        const aliases = loadAliases();
+
+        // --- Mode 2: Generate template ---
+        if (options.generate) {
+          const from = options.from || getMonday();
+          const to = options.to || getFriday();
+          const outPath = options.out || "batch.json";
+          await generateBatchFile(from, to, outPath);
+          return;
+        }
+
+        // --- Build entries list ---
+        let entries: TimeEntry[];
+
+        if (options.file) {
+          // Mode 3: File import
+          entries = parseFile(options.file, options.includeWeekends);
+          // Resolve aliases per entry
+          for (const entry of entries) {
+            entry.project = resolveProject(entry.project);
+            entry.serviceType = resolveServiceType(entry.serviceType);
+          }
+        } else {
+          // Mode 1: Range fill — requires project, hours, text
+          if (!options.project && !options.hours) {
+            fail(err("--project and --hours are required for range fill mode. Use --file to import from a file."));
+            process.exit(1);
+          }
+
+          let project: string;
+          if (options.project) {
+            project = resolveProject(options.project);
+          } else {
+            project = await promptSelect("project", aliases.projects);
+          }
+
+          let serviceType: string;
+          if (options.serviceType) {
+            serviceType = resolveServiceType(options.serviceType);
+          } else if (Object.keys(aliases.serviceTypes).length > 0) {
+            serviceType = await promptSelect("service-type", aliases.serviceTypes);
+          } else {
+            serviceType = "1435";
+          }
+
+          const from = options.from || getMonday();
+          const to = options.to || getFriday();
+          const weekdays = getWeekdays(from, to);
+
+          entries = weekdays.map((date) => ({
+            project,
+            serviceType,
+            hours: options.hours,
+            date,
+            description: options.text || "",
+          }));
+        }
+
+        if (entries.length === 0) {
+          console.log(info(t().batchNoEntries));
+          return;
+        }
+
+        // --- Dry-run mode ---
+        if (options.dryRun) {
+          console.log("");
+          console.log(bold(t().batchDryRun));
+          console.log("");
+
+          const table = new Table({
+            head: [t().headerDate, t().headerProject, t().headerServiceType, t().headerHours, t().headerText],
+            style: { head: ["cyan"] },
+          });
+
+          for (const e of entries) {
+            table.push([e.date, e.project, e.serviceType, String(e.hours), e.description]);
+          }
+
+          console.log(table.toString());
+          console.log("");
+          console.log(info(`${entries.length} entries would be created.`));
+          return;
+        }
+
+        // --- Print summary before running ---
+        console.log("");
+        console.log(bold(`Batch: ${entries.length} entries`));
+        for (const e of entries) {
+          console.log(`  ${highlight(e.date)}  ${e.project}  ${e.serviceType}  ${e.hours}h  ${e.description}`);
+        }
+        console.log("");
+
+        await batchLogTime(entries);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        fail(err(message));
+        process.exit(1);
+      }
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Batch helpers
+// ---------------------------------------------------------------------------
+
+/** Get Monday of the current week as YYYY-MM-DD. */
+function getMonday(): string {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - ((day === 0 ? 7 : day) - 1);
+  const monday = new Date(now);
+  monday.setDate(diff);
+  return monday.toISOString().split("T")[0];
+}
+
+/** Get Friday of the current week as YYYY-MM-DD. */
+function getFriday(): string {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - ((day === 0 ? 7 : day) - 1) + 4;
+  const friday = new Date(now);
+  friday.setDate(diff);
+  return friday.toISOString().split("T")[0];
+}
+
+/** Get all weekday dates (Mon-Fri) in a range as YYYY-MM-DD. */
+function getWeekdays(from: string, to: string): string[] {
+  const result: string[] = [];
+  const start = new Date(from);
+  const end = new Date(to);
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) {
+      result.push(d.toISOString().split("T")[0]);
+    }
+  }
+  return result;
+}
+
+/** Parse a batch file (JSON or CSV) into TimeEntry[]. */
+function parseFile(filePath: string, includeWeekends: boolean): TimeEntry[] {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(t().batchFileNotFound(filePath));
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  let entries: TimeEntry[];
+
+  if (ext === ".json") {
+    const raw = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    if (!Array.isArray(raw)) throw new Error(t().batchInvalidFormat);
+    entries = raw.map((r: any) => ({
+      project: String(r.project || ""),
+      serviceType: String(r.serviceType || "1435"),
+      hours: Number(r.hours || 0),
+      date: String(r.date || ""),
+      description: String(r.text || r.description || ""),
+    }));
+  } else if (ext === ".csv") {
+    const lines = fs.readFileSync(filePath, "utf-8").trim().split("\n");
+    if (lines.length < 2) throw new Error(t().batchInvalidFormat);
+    const headers = lines[0].split(",").map((h) => h.trim());
+    entries = lines.slice(1).map((line) => {
+      const cols = line.split(",").map((c) => c.trim());
+      const row: Record<string, string> = {};
+      headers.forEach((h, i) => (row[h] = cols[i] || ""));
+      return {
+        project: row.project || "",
+        serviceType: row.serviceType || "1435",
+        hours: Number(row.hours || 0),
+        date: row.date || "",
+        description: row.text || row.description || "",
+      };
+    });
+  } else {
+    throw new Error(t().batchInvalidFormat);
+  }
+
+  // Filter out weekends unless --include-weekends
+  if (!includeWeekends) {
+    entries = entries.filter((e) => {
+      const d = new Date(e.date);
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) {
+        console.log(warn(t().batchWeekendSkipped(e.date)));
+        return false;
+      }
+      return true;
+    });
+  }
+
+  return entries;
 }
