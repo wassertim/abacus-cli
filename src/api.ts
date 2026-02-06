@@ -114,6 +114,33 @@ function fmtHoursAndDays(n: number): string {
   return `${fmtHours(n)} ${t().statusHoursUnit} (${days.toFixed(1)}${t().statusDaysUnit})`;
 }
 
+/** Print quick-action hints when there are missing days. */
+function printHints(entries: ExistingEntry[], missingDayDates: string[], hours: number, fallbackDate: string): void {
+  const lastEntry = entries[entries.length - 1];
+  if (!lastEntry || missingDayDates.length === 0) return;
+  const projectArg = reverseProject(lastEntry.project) || lastEntry.project;
+  const serviceTypeArg = reverseServiceType(lastEntry.serviceType) || lastEntry.serviceType;
+  const text = lastEntry.text || "...";
+  const toIso = (d: string) => d.split(".").reverse().join("-");
+  const targetDate = missingDayDates.length > 0 ? toIso(missingDayDates[0]) : fallbackDate;
+  console.log("");
+  console.log(dim(`  💡 ${t().hintQuickActions}`));
+  console.log("");
+  console.log(dim(`  ${t().hintLogSingle}`));
+  console.log(info(`    npx abacus time log --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}" --date ${targetDate}`));
+  if (missingDayDates.length > 1) {
+    console.log("");
+    console.log(dim(`  ${t().hintBatchFill}`));
+    console.log(info(`    npx abacus time batch --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}"`));
+    console.log("");
+    console.log(dim(`  ${t().hintBatchGenerate}`));
+    console.log(info(`    npx abacus time batch --generate`));
+    console.log(info(`    code batch.json`));
+    console.log(info(`    npx abacus time batch --file batch.json`));
+  }
+  console.log("");
+}
+
 /** Get short weekday name using Intl (locale-aware, e.g. Mon/Di/Lun). */
 function shortDayName(d: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(d);
@@ -214,33 +241,11 @@ export async function statusTime(date: string): Promise<void> {
 
     // --- Example command hints ---
     if (weekly.difference < 0) {
-      const missing = Math.abs(weekly.difference);
-      const lastEntry = entries[entries.length - 1];
-      if (lastEntry) {
-        const projectArg = reverseProject(lastEntry.project) || lastEntry.project;
-        const serviceTypeArg = reverseServiceType(lastEntry.serviceType) || lastEntry.serviceType;
-        const hours = Math.min(missing, 8);
-        const text = lastEntry.text || "...";
-        const toIso = (d: string) => d.split(".").reverse().join("-");
-        const targetDateStr = missingDayDates.length > 0
-          ? toIso(missingDayDates[0])
-          : date;
-        console.log("");
-        console.log(dim(`  💡 ${t().hintQuickActions}`));
-        console.log(dim(`  ${t().hintLogSingle}`));
-        console.log(info(`    npx abacus time log --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}" --date ${targetDateStr}`));
-        if (missingDayDates.length > 1) {
-          console.log(dim(`  ${t().hintBatchFill}`));
-          console.log(info(`    npx abacus time batch --project ${projectArg} --hours ${hours.toFixed(2)} --service-type ${serviceTypeArg} --text "${text}"`));
-          console.log(dim(`  ${t().hintBatchGenerate}`));
-          console.log(info(`    npx abacus time batch --generate`));
-          console.log(info(`    code batch.json`));
-          console.log(info(`    npx abacus time batch --file batch.json`));
-        }
-      }
+      const hours = Math.min(Math.abs(weekly.difference), 8);
+      printHints(entries, missingDayDates, hours, date);
+    } else {
+      console.log("");
     }
-
-    console.log("");
   } finally {
     await close();
   }
@@ -339,10 +344,12 @@ export async function listTime(monthYear: string): Promise<void> {
 
     console.log("");
     console.log(table.toString());
-    console.log("");
     console.log(info(t().entriesTotal(entries.length)));
     if (missingCount > 0) {
       console.log(warn(t().missingDaysSummary(missingCount)));
+
+      const missingDays = weekdays.filter((d) => !entriesByDate.has(d) || entriesByDate.get(d)!.length === 0);
+      printHints(entries, missingDays, 8, "");
     }
   } finally {
     await close();

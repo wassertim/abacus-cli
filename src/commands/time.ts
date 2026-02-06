@@ -32,7 +32,6 @@ export function registerTimeCommands(program: Command): void {
     .requiredOption("--monthYear <MM.YYYY>", "Month and year (e.g. 01.2025)")
     .action(async (options) => {
       console.log(info(t().listingEntries(options.monthYear)));
-      console.log("");
 
       try {
         await listTime(options.monthYear);
