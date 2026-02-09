@@ -58,6 +58,7 @@ export async function navigateToLeistungen(page: Page): Promise<void> {
     const headedContext = await chromium.launchPersistentContext(cfg.chromeDataDir, {
       headless: false,
       channel: "chrome",
+      chromiumSandbox: true,
       viewport: { width: 1280, height: 800 },
     });
     const headedPage = headedContext.pages()[0] || await headedContext.newPage();

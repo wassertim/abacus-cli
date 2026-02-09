@@ -25,6 +25,7 @@ export async function login(): Promise<void> {
   const context = await chromium.launchPersistentContext(config.chromeDataDir, {
     headless: false,
     channel: "chrome",
+    chromiumSandbox: true,
     viewport: { width: 1280, height: 800 },
   });
   const page = context.pages()[0] || await context.newPage();
@@ -47,8 +48,9 @@ export async function login(): Promise<void> {
     });
   }
 
-  // Write marker so other commands know login has been done
-  fs.writeFileSync(config.statePath, JSON.stringify({ loggedIn: true }));
+  // Save session cookies so they can be restored in headless runs
+  const storageState = await context.storageState();
+  fs.writeFileSync(config.statePath, JSON.stringify(storageState, null, 2));
 
   // Persist URL so the launchd daemon can find it
   saveConfigFile({ abacusUrl: config.abacusUrl });
@@ -75,15 +77,29 @@ export async function createAuthenticatedContext(): Promise<{
     );
   }
 
+  const storageState = JSON.parse(fs.readFileSync(config.statePath, "utf-8"));
+
   const context = await chromium.launchPersistentContext(config.chromeDataDir, {
     headless: config.headless,
     channel: "chrome",
+    chromiumSandbox: true,
     viewport: { width: 1280, height: 800 },
   });
+
+  // Restore session cookies into the persistent context
+  if (storageState.cookies?.length) {
+    await context.addCookies(storageState.cookies);
+  }
 
   return {
     context,
     close: async () => {
+      try {
+        const state = await context.storageState();
+        fs.writeFileSync(config.statePath, JSON.stringify(state, null, 2));
+      } catch {
+        // Best-effort session update
+      }
       await context.close();
     },
   };
