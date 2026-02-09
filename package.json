@@ -1,6 +1,6 @@
 {
   "name": "abacus-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI tool for Abacus time tracking via Playwright browser automation",
   "author": "Tim Petri",
   "license": "MIT",
