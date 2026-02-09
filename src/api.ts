@@ -2,7 +2,7 @@
 // There is no REST API. All interactions must go through browser automation.
 
 import Table from "cli-table3";
-import { Page } from "rebrowser-playwright-core";
+import { Page } from "patchright-core";
 import { createAuthenticatedContext } from "./auth";
 import { config, ensureConfigDir } from "./config";
 import { t, getLocale, confirmDeleteKey } from "./i18n";

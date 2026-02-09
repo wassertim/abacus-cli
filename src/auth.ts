@@ -1,30 +1,10 @@
-// Must be set BEFORE importing rebrowser-playwright-core
-process.env.REBROWSER_PATCHES_RUNTIME_FIX_MODE = "addBinding";
-
-import { chromium, BrowserContext } from "rebrowser-playwright-core";
+import { chromium, BrowserContext } from "patchright-core";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
 import os from "os";
 import chalk from "chalk";
 import { config, ensureConfigDir, hasState, saveConfigFile } from "./config";
-
-const STEALTH_ARGS = [
-  "--disable-blink-features=AutomationControlled",
-  "--no-sandbox",
-  "--disable-dev-shm-usage",
-  "--disable-gpu",
-  "--disable-extensions",
-  "--disable-infobars",
-  "--disable-background-networking",
-  "--disable-sync",
-  "--disable-translate",
-  "--metrics-recording-only",
-  "--no-first-run",
-];
-
-const USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 export async function login(): Promise<void> {
   if (!config.abacusUrl) {
@@ -42,12 +22,12 @@ export async function login(): Promise<void> {
   console.log("The browser will close automatically once login is detected.");
   console.log("");
 
-  const browser = await chromium.launch({ headless: false, args: STEALTH_ARGS });
-  const context = await browser.newContext({
-    userAgent: USER_AGENT,
+  const context = await chromium.launchPersistentContext(config.chromeDataDir, {
+    headless: false,
+    channel: "chrome",
     viewport: { width: 1280, height: 800 },
   });
-  const page = await context.newPage();
+  const page = context.pages()[0] || await context.newPage();
 
   await page.goto(config.abacusUrl);
 
@@ -67,17 +47,16 @@ export async function login(): Promise<void> {
     });
   }
 
-  // Save browser state (cookies + storage)
-  const storageState = await context.storageState();
-  fs.writeFileSync(config.statePath, JSON.stringify(storageState, null, 2));
+  // Write marker so other commands know login has been done
+  fs.writeFileSync(config.statePath, JSON.stringify({ loggedIn: true }));
 
   // Persist URL so the launchd daemon can find it
   saveConfigFile({ abacusUrl: config.abacusUrl });
 
   console.log("");
-  console.log(chalk.green(`Session saved to ${config.statePath}`));
+  console.log(chalk.green("Session saved"));
 
-  await browser.close();
+  await context.close();
 }
 
 export async function createAuthenticatedContext(): Promise<{
@@ -96,34 +75,16 @@ export async function createAuthenticatedContext(): Promise<{
     );
   }
 
-  const storageState = JSON.parse(fs.readFileSync(config.statePath, "utf-8"));
-
-  const browser = await chromium.launch({
+  const context = await chromium.launchPersistentContext(config.chromeDataDir, {
     headless: config.headless,
-    args: STEALTH_ARGS,
-  });
-  const context = await browser.newContext({
-    storageState,
-    userAgent: USER_AGENT,
+    channel: "chrome",
     viewport: { width: 1280, height: 800 },
-    extraHTTPHeaders: {
-      "sec-ch-ua":
-        '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="99"',
-      "sec-ch-ua-mobile": "?0",
-      "sec-ch-ua-platform": '"macOS"',
-    },
   });
 
   return {
     context,
     close: async () => {
-      try {
-        const state = await context.storageState();
-        fs.writeFileSync(config.statePath, JSON.stringify(state, null, 2));
-      } catch {
-        // Session update is best-effort; failure here is non-critical
-      }
-      await browser.close();
+      await context.close();
     },
   };
 }

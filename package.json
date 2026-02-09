@@ -28,7 +28,7 @@
     "abacus": "dist/index.js"
   },
   "scripts": {
-    "postinstall": "npx rebrowser-playwright-core install chromium",
+    "postinstall": "npx patchright-core install chrome",
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "start": "node dist/index.js"
@@ -39,8 +39,7 @@
     "commander": "^12.1.0",
     "dotenv": "^17.2.3",
     "ora": "^5.4.1",
-    "playwright": "^1.48.0",
-    "rebrowser-playwright-core": "^1.52.0"
+    "patchright-core": "^1.57.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

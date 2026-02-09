@@ -43,6 +43,7 @@ export const config = {
   discoveryPath: path.join(CONFIG_DIR, "api-discovery.json"),
   credentialsPath: path.join(CONFIG_DIR, "api-credentials.json"),
   statusCachePath: path.join(CONFIG_DIR, "status-cache.json"),
+  chromeDataDir: path.join(CONFIG_DIR, "chrome-data"),
 };
 
 export function ensureConfigDir(): void {

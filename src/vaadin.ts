@@ -1,7 +1,7 @@
 // Generic Vaadin-over-Playwright primitives.
 // No business logic or page-structure knowledge.
 
-import { Page } from "rebrowser-playwright-core";
+import { Page } from "patchright-core";
 
 /** Wait for Vaadin to finish processing (no pending server requests). */
 export async function waitForVaadin(page: Page): Promise<void> {

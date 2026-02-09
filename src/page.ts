@@ -1,7 +1,7 @@
 // Leistungen page interaction layer.
 // Knows page structure (selectors, grid layout) but no business logic.
 
-import { Page } from "rebrowser-playwright-core";
+import { Page } from "patchright-core";
 import { waitForVaadin, fillCombobox, selectComboboxByIndex } from "./vaadin";
 import { config } from "./config";
 import { t } from "./i18n";
@@ -48,29 +48,20 @@ export async function navigateToLeistungen(page: Page): Promise<void> {
   if (page.url().includes("fortiadc_captcha")) {
     fail(err(t().captchaDetected));
 
-    // Get the browser context to access storageState and relaunch
+    // Close headless browser — persistent context saves state on close
     const context = page.context();
-    const state = await context.storageState();
-    const browser = context.browser();
+    await context.close();
 
-    // Close headless browser
-    if (browser) await browser.close();
-
-    // Relaunch in headed mode
-    const { chromium } = await import("rebrowser-playwright-core");
-    const headedBrowser = await chromium.launch({
+    // Relaunch in headed mode with same persistent profile
+    const { chromium } = await import("patchright-core");
+    const { config: cfg } = await import("./config");
+    const headedContext = await chromium.launchPersistentContext(cfg.chromeDataDir, {
       headless: false,
-      args: [
-        "--disable-blink-features=AutomationControlled",
-        "--no-first-run",
-      ],
-    });
-    const headedContext = await headedBrowser.newContext({
-      storageState: state,
+      channel: "chrome",
       viewport: { width: 1280, height: 800 },
     });
-    const headedPage = await headedContext.newPage();
-    await headedPage.goto(config.abacusUrl, { waitUntil: "networkidle" });
+    const headedPage = headedContext.pages()[0] || await headedContext.newPage();
+    await headedPage.goto(cfg.abacusUrl, { waitUntil: "networkidle" });
 
     console.log(t().captchaSolve);
     console.log(t().captchaWaiting);
@@ -82,13 +73,7 @@ export async function navigateToLeistungen(page: Page): Promise<void> {
     );
     await waitForVaadin(headedPage);
 
-    // Save updated session state (with captcha cookie)
-    const newState = await headedContext.storageState();
-    const fs = await import("fs");
-    const { config: cfg } = await import("./config");
-    fs.writeFileSync(cfg.statePath, JSON.stringify(newState, null, 2));
-
-    await headedBrowser.close();
+    await headedContext.close();
 
     // Throw a special error to retry the whole operation
     throw new Error("CAPTCHA_SOLVED_RETRY");
