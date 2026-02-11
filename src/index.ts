@@ -10,6 +10,7 @@ import { registerTimeCommands } from "./commands/time";
 import { registerAliasCommands } from "./commands/alias";
 import { config, saveConfigFile, getConfigFilePath } from "./config";
 import { getLocale, localeSource, t } from "./i18n";
+import { getISOWeekNumber } from "./dates";
 
 const program = new Command();
 
@@ -126,12 +127,6 @@ function readStatusCache(): Record<string, unknown> | null {
   }
 }
 
-function getISOWeekNumber(d: Date): number {
-  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
-  return Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
 
 function isCacheCurrentWeek(cache: Record<string, unknown>): boolean {
   const cacheWeek = cache.weekNumber as number;
@@ -185,7 +180,9 @@ program
     // Cache missing or from a different week — auto-fetch
     try {
       const { statusTime } = await import("./api");
-      await statusTime(new Date().toISOString().split("T")[0]);
+      const now = new Date();
+      const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      await statusTime(todayISO);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(chalk.red(message));

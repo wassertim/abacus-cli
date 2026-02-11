@@ -7,6 +7,7 @@ import { t, confirmDeleteKey } from "../i18n";
 import chalk from "chalk";
 import { bold, highlight, info, warn, err, fail } from "../ui";
 import { loadAliases, resolveProject, resolveServiceType, promptSelect, promptCheckbox } from "../aliases";
+import { toLocalISO, getWeekdays, getMonday, getFriday } from "../dates";
 
 export function registerTimeCommands(program: Command): void {
   const time = program.command("time").description("Time tracking commands");
@@ -16,7 +17,7 @@ export function registerTimeCommands(program: Command): void {
     .description("Show time report for a week")
     .option("--date <YYYY-MM-DD>", "Date within the target week (default: today)")
     .action(async (options) => {
-      const date = options.date || new Date().toISOString().split("T")[0];
+      const date = options.date || toLocalISO(new Date());
       try {
         await statusTime(date);
       } catch (error: unknown) {
@@ -53,7 +54,7 @@ export function registerTimeCommands(program: Command): void {
     .requiredOption("--text <text>", "Description")
     .option("--date <YYYY-MM-DD>", "Date (default: today)")
     .action(async (options) => {
-      const date = options.date || new Date().toISOString().split("T")[0];
+      const date = options.date || toLocalISO(new Date());
       const aliases = loadAliases();
 
       try {
@@ -336,40 +337,6 @@ export function registerTimeCommands(program: Command): void {
 // ---------------------------------------------------------------------------
 // Batch helpers
 // ---------------------------------------------------------------------------
-
-/** Get Monday of the current week as YYYY-MM-DD. */
-function getMonday(): string {
-  const now = new Date();
-  const day = now.getDay();
-  const diff = now.getDate() - ((day === 0 ? 7 : day) - 1);
-  const monday = new Date(now);
-  monday.setDate(diff);
-  return monday.toISOString().split("T")[0];
-}
-
-/** Get Friday of the current week as YYYY-MM-DD. */
-function getFriday(): string {
-  const now = new Date();
-  const day = now.getDay();
-  const diff = now.getDate() - ((day === 0 ? 7 : day) - 1) + 4;
-  const friday = new Date(now);
-  friday.setDate(diff);
-  return friday.toISOString().split("T")[0];
-}
-
-/** Get all weekday dates (Mon-Fri) in a range as YYYY-MM-DD. */
-function getWeekdays(from: string, to: string): string[] {
-  const result: string[] = [];
-  const start = new Date(from);
-  const end = new Date(to);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dow = d.getDay();
-    if (dow !== 0 && dow !== 6) {
-      result.push(d.toISOString().split("T")[0]);
-    }
-  }
-  return result;
-}
 
 /** Parse a batch file (JSON or CSV) into TimeEntry[]. */
 function parseFile(filePath: string, includeWeekends: boolean): TimeEntry[] {

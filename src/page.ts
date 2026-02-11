@@ -4,6 +4,7 @@
 import { Page } from "patchright-core";
 import { waitForVaadin, fillCombobox, selectComboboxByIndex } from "./vaadin";
 import { config } from "./config";
+import { formatDate, toMonthYear } from "./dates";
 import { t } from "./i18n";
 import { spin, fail, succeed, stopSpinner } from "./ui";
 import { err, warn } from "./ui";
@@ -561,14 +562,4 @@ export async function readVacationPanel(page: Page): Promise<VacationData | null
   };
 }
 
-/** Format date from YYYY-MM-DD to DD.MM.YYYY */
-export function formatDate(date: string): string {
-  const [y, m, d] = date.split("-");
-  return `${d}.${m}.${y}`;
-}
-
-/** Extract MM.YYYY from a YYYY-MM-DD date string. */
-export function toMonthYear(date: string): string {
-  const [y, m] = date.split("-");
-  return `${m}.${y}`;
-}
+export { formatDate, toMonthYear };

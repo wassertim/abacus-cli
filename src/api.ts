@@ -29,14 +29,13 @@ import {
   closeSidePanelIfOpen,
   createEntry,
   saveEntry,
-  formatDate,
-  toMonthYear,
 } from "./page";
+import { toLocalISO, fmtFull, getISOWeekNumber, formatDate, toMonthYear } from "./dates";
 import { waitForVaadin } from "./vaadin";
 import { reverseProject, reverseServiceType } from "./aliases";
 
 export type { TimeEntry, ExistingEntry } from "./page";
-export { formatDate, toMonthYear } from "./page";
+export { formatDate, toMonthYear } from "./dates";
 
 // Re-import types for local use
 import type { TimeEntry, ExistingEntry } from "./page";
@@ -83,13 +82,6 @@ export async function fetchExistingEntries(dates: string[]): Promise<ExistingEnt
 // Status helpers
 // ---------------------------------------------------------------------------
 
-/** Get ISO week number for a date. */
-function getISOWeekNumber(d: Date): number {
-  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
-  return Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
 
 /** Right-pad a label to a fixed width. */
 function pad(label: string, width: number): string {
@@ -146,10 +138,6 @@ function shortDayName(d: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(d);
 }
 
-/** Format a Date as DD.MM.YYYY. */
-function fmtFull(d: Date): string {
-  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
-}
 
 interface CacheOverrides {
   worked?: number;
@@ -182,7 +170,7 @@ function updateCacheFromEntries(entries: ExistingEntry[], monthYear: string, ove
   for (let d = new Date(year, month, 1); d <= endDate; d.setDate(d.getDate() + 1)) {
     const dow = d.getDay();
     if (dow === 0 || dow === 6) continue;
-    const dStr = formatDate(d.toISOString().split("T")[0]);
+    const dStr = fmtFull(new Date(d));
     const hasEntry = entries.some((e) => e.date === dStr);
     if (!hasEntry) {
       missingDayNames.push(shortDayName(new Date(d), locale));
@@ -250,7 +238,7 @@ function updateCacheFromEntries(entries: ExistingEntry[], monthYear: string, ove
 async function refreshCache(page: Page): Promise<void> {
   try {
     spin(t().updatingCache);
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = toLocalISO(new Date());
     const monthYear = toMonthYear(todayStr);
 
     await setMonthFilter(page, monthYear);
@@ -328,7 +316,7 @@ export async function statusTime(date: string): Promise<void> {
     for (let d = new Date(monday); d <= today && d <= friday; d.setDate(d.getDate() + 1)) {
       const dow = d.getDay();
       if (dow === 0 || dow === 6) continue;
-      const dStr = formatDate(d.toISOString().split("T")[0]);
+      const dStr = fmtFull(new Date(d));
       const hasEntry = entries.some((e) => e.date === dStr);
       if (!hasEntry) {
         missingDayNames.push(shortDayName(new Date(d), locale));
@@ -808,7 +796,7 @@ export async function generateBatchFile(
     const startDate = new Date(from);
     const endDate = new Date(to);
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      months.add(toMonthYear(d.toISOString().split("T")[0]));
+      months.add(toMonthYear(toLocalISO(d)));
     }
 
     for (const monthYear of months) {
@@ -823,7 +811,7 @@ export async function generateBatchFile(
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const dow = d.getDay();
       if (dow === 0 || dow === 6) continue;
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = toLocalISO(d);
       const formatted = formatDate(dateStr);
       const hasEntry = allExisting.some((e) => e.date === formatted);
       if (!hasEntry) {
