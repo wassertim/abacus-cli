@@ -229,7 +229,9 @@ program
     console.log(chalk.yellow(`⚠ ${t().checkWarning(missingStr)}`));
 
     const date = missingDays[0].date.split(".").reverse().join("-");
-    console.log(chalk.dim(`  run: abacus time log --hours 8.00 --text "${t().defaultBookingText}" --date ${date}`));
+    const remaining = cache.remaining as number | undefined;
+    const hours = remaining && remaining > 0 ? Math.min(remaining, 8).toFixed(2) : "8.00";
+    console.log(chalk.dim(`  run: abacus time log --hours ${hours} --text "${t().defaultBookingText}" --date ${date}`));
   });
 
 registerTimeCommands(program);

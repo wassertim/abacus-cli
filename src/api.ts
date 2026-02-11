@@ -151,11 +151,20 @@ function fmtFull(d: Date): string {
   return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 }
 
+interface CacheOverrides {
+  worked?: number;
+  target?: number;
+  remaining?: number;
+  saldo?: { overtime: number; extraTime: number; total: number } | null;
+  vacation?: { remaining: number; entitlement: number; remainingDays: number; entitlementDays: number } | null;
+}
+
 /**
  * Compute month-level missing days and week-level stats, then write the cache.
- * Reused by refreshCache and listTime.
+ * Reused by refreshCache, listTime, and statusTime.
+ * When overrides are provided (e.g. from Wochenrapport), they replace computed/cached values.
  */
-function updateCacheFromEntries(entries: ExistingEntry[], monthYear: string): void {
+function updateCacheFromEntries(entries: ExistingEntry[], monthYear: string, overrides?: CacheOverrides): void {
   const locale = getLocale();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -210,8 +219,9 @@ function updateCacheFromEntries(entries: ExistingEntry[], monthYear: string): vo
     // Cache may not exist yet
   }
 
-  const target = (existingCache?.target as number) || 40;
-  const remaining = Math.max(0, target - worked);
+  const finalWorked = overrides?.worked ?? worked;
+  const target = overrides?.target ?? ((existingCache?.target as number) || 40);
+  const remaining = overrides?.remaining ?? Math.max(0, target - finalWorked);
 
   ensureConfigDir();
   const cache = {
@@ -220,15 +230,15 @@ function updateCacheFromEntries(entries: ExistingEntry[], monthYear: string): vo
     weekNumber: weekNum,
     monday: fmtFull(monday),
     friday: fmtFull(friday),
-    worked,
+    worked: finalWorked,
     target,
     remaining,
     missingDays: missingDayNames.map((name, i) => ({
       date: missingDayDates[i],
       dayName: name,
     })),
-    saldo: existingCache?.saldo ?? null,
-    vacation: existingCache?.vacation ?? null,
+    saldo: overrides?.saldo !== undefined ? overrides.saldo : (existingCache?.saldo ?? null),
+    vacation: overrides?.vacation !== undefined ? overrides.vacation : (existingCache?.vacation ?? null),
   };
   fs.writeFileSync(config.statusCachePath, JSON.stringify(cache, null, 2) + "\n");
 }
@@ -352,39 +362,10 @@ export async function statusTime(date: string): Promise<void> {
     const currentMonthYear = `${String(nowForCache.getMonth() + 1).padStart(2, "0")}.${nowForCache.getFullYear()}`;
     if (monthYear === currentMonthYear) {
       try {
-        const [mmC, yyyyC] = monthYear.split(".");
-        const yearC = parseInt(yyyyC, 10);
-        const monthC = parseInt(mmC, 10) - 1;
-        const lastDayOfMonth = new Date(yearC, monthC + 1, 0);
-        const endDateForMonth = lastDayOfMonth < today ? lastDayOfMonth : today;
-
-        const monthMissingDayNames: string[] = [];
-        const monthMissingDayDates: string[] = [];
-        for (let dm = new Date(yearC, monthC, 1); dm <= endDateForMonth; dm.setDate(dm.getDate() + 1)) {
-          const dow = dm.getDay();
-          if (dow === 0 || dow === 6) continue;
-          const dStr = formatDate(dm.toISOString().split("T")[0]);
-          const hasEntry = entries.some((e) => e.date === dStr);
-          if (!hasEntry) {
-            monthMissingDayNames.push(shortDayName(new Date(dm), locale));
-            monthMissingDayDates.push(dStr);
-          }
-        }
-
-        ensureConfigDir();
-        const cache = {
-          updatedAt: new Date().toISOString(),
-          month: monthYear,
-          weekNumber: weekNum,
-          monday: fmtFull(monday),
-          friday: fmtFull(friday),
+        updateCacheFromEntries(entries, monthYear, {
           worked: weekly.worked,
           target: weekly.target,
           remaining,
-          missingDays: monthMissingDayNames.map((name, i) => ({
-            date: monthMissingDayDates[i],
-            dayName: name,
-          })),
           saldo: saldo ? { overtime: saldo.overtime, extraTime: saldo.extraTime, total: saldo.total } : null,
           vacation: vacation ? {
             remaining: vacation.remaining,
@@ -392,8 +373,7 @@ export async function statusTime(date: string): Promise<void> {
             remainingDays: parseFloat((vacation.remaining / 8).toFixed(1)),
             entitlementDays: parseFloat((vacation.entitlement / 8).toFixed(1)),
           } : null,
-        };
-        fs.writeFileSync(config.statusCachePath, JSON.stringify(cache, null, 2) + "\n");
+        });
       } catch {
         // Cache write failure is non-critical, silently ignore
       }

@@ -133,27 +133,6 @@ export async function setMonthFilter(page: Page, monthYear: string): Promise<voi
   await waitForVaadin(page);
 }
 
-/**
- * Set the Leistungen page filters to show a week containing the given date.
- * @param date — format "YYYY-MM-DD"
- */
-export async function setWeekFilter(page: Page, date: string): Promise<void> {
-  spin(t().settingViewWeek);
-  await selectComboboxByIndex(page, "cmbDateRange", 2);
-
-  const formattedDate = formatDate(date);
-  spin(t().settingDate(formattedDate));
-  const datePicker = page.locator("vaadin-date-picker#dateField");
-  const input = datePicker.locator("input");
-
-  await input.click({ clickCount: 3 });
-  await page.keyboard.press("Backspace");
-  await input.pressSequentially(formattedDate, { delay: 30 });
-  await input.press("Enter");
-  await page.waitForTimeout(500);
-  await waitForVaadin(page);
-}
-
 /** Read all visible entries from the Leistungen grid. */
 export async function readGridEntries(page: Page): Promise<ExistingEntry[]> {
   // Check for empty state first
