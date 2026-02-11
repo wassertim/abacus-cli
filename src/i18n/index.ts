@@ -137,7 +137,7 @@ export interface Translations {
   summaryLine2: (overtime: string, overtimeDays: string, vacationDays: string) => string;
   summaryUpdatedAgo: (ago: string) => string;
   summaryFetching: string;
-  checkWarning: (missingDays: string, remaining: string) => string;
+  checkWarning: (missingDays: string) => string;
   checkReminder: string;
   timeAgoMinutes: (n: number) => string;
   timeAgoHours: (n: number) => string;

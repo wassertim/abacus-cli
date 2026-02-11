@@ -17,7 +17,6 @@ import {
   withCaptchaRetry,
   navigateToLeistungen,
   setMonthFilter,
-  setWeekFilter,
   readGridEntries,
   navigateToWochenrapport,
   readWeeklyReport,
@@ -147,78 +146,117 @@ function shortDayName(d: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(d);
 }
 
+/** Format a Date as DD.MM.YYYY. */
+function fmtFull(d: Date): string {
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+}
+
+interface CacheOverrides {
+  worked?: number;
+  target?: number;
+  remaining?: number;
+  saldo?: { overtime: number; extraTime: number; total: number } | null;
+  vacation?: { remaining: number; entitlement: number; remainingDays: number; entitlementDays: number } | null;
+}
+
 /**
- * Refresh the week cache after a log/delete operation.
- * Switches to week view, reads current entries, and updates the cache file.
+ * Compute month-level missing days and week-level stats, then write the cache.
+ * Reused by refreshCache, listTime, and statusTime.
+ * When overrides are provided (e.g. from Wochenrapport), they replace computed/cached values.
  */
-async function refreshWeekCache(page: Page): Promise<void> {
-  try {
-    spin(t().updatingCache);
-    const today = new Date();
-    const todayStr = today.toISOString().split("T")[0];
+function updateCacheFromEntries(entries: ExistingEntry[], monthYear: string, overrides?: CacheOverrides): void {
+  const locale = getLocale();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-    await setWeekFilter(page, todayStr);
-    const entries = await readGridEntries(page);
+  const [mm, yyyy] = monthYear.split(".");
+  const year = parseInt(yyyy, 10);
+  const month = parseInt(mm, 10) - 1;
 
-    const locale = getLocale();
-    const dayOfWeek = today.getDay();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) - 1));
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-    const weekNum = getISOWeekNumber(today);
+  // Compute missing weekdays from month start to today
+  const lastDay = new Date(year, month + 1, 0);
+  const endDate = lastDay < today ? lastDay : today;
 
-    // Compute missing days (same logic as statusTime)
-    const missingDayNames: string[] = [];
-    const missingDayDates: string[] = [];
-    for (let d = new Date(monday); d <= today && d <= friday; d.setDate(d.getDate() + 1)) {
-      const dow = d.getDay();
-      if (dow === 0 || dow === 6) continue;
-      const dStr = formatDate(d.toISOString().split("T")[0]);
-      const hasEntry = entries.some((e) => e.date === dStr);
-      if (!hasEntry) {
-        missingDayNames.push(shortDayName(new Date(d), locale));
-        missingDayDates.push(dStr);
-      }
+  const missingDayNames: string[] = [];
+  const missingDayDates: string[] = [];
+  for (let d = new Date(year, month, 1); d <= endDate; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) continue;
+    const dStr = formatDate(d.toISOString().split("T")[0]);
+    const hasEntry = entries.some((e) => e.date === dStr);
+    if (!hasEntry) {
+      missingDayNames.push(shortDayName(new Date(d), locale));
+      missingDayDates.push(dStr);
     }
+  }
 
-    // Sum hours from entries
-    const worked = entries.reduce((sum, e) => {
+  // Week-level stats
+  const dayOfWeek = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) - 1));
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  const weekNum = getISOWeekNumber(today);
+
+  // Filter entries to current week for worked hours
+  const weekDates = new Set<string>();
+  for (let d = new Date(monday); d <= friday; d.setDate(d.getDate() + 1)) {
+    weekDates.add(fmtFull(new Date(d)));
+  }
+
+  const worked = entries
+    .filter((e) => weekDates.has(e.date))
+    .reduce((sum, e) => {
       const h = parseFloat(e.hours.replace(",", "."));
       return sum + (isNaN(h) ? 0 : h);
     }, 0);
 
-    // Preserve saldo/vacation/target from existing cache
-    let existingCache: Record<string, unknown> | null = null;
-    try {
-      existingCache = JSON.parse(fs.readFileSync(config.statusCachePath, "utf-8"));
-    } catch {
-      // Cache may not exist yet; fall back to defaults
-    }
+  // Preserve saldo/vacation/target from existing cache
+  let existingCache: Record<string, unknown> | null = null;
+  try {
+    existingCache = JSON.parse(fs.readFileSync(config.statusCachePath, "utf-8"));
+  } catch {
+    // Cache may not exist yet
+  }
 
-    const target = (existingCache?.target as number) || 40;
-    const remaining = Math.max(0, target - worked);
+  const finalWorked = overrides?.worked ?? worked;
+  const target = overrides?.target ?? ((existingCache?.target as number) || 40);
+  const remaining = overrides?.remaining ?? Math.max(0, target - finalWorked);
 
-    const fmtFull = (d: Date) =>
-      `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+  ensureConfigDir();
+  const cache = {
+    updatedAt: new Date().toISOString(),
+    month: monthYear,
+    weekNumber: weekNum,
+    monday: fmtFull(monday),
+    friday: fmtFull(friday),
+    worked: finalWorked,
+    target,
+    remaining,
+    missingDays: missingDayNames.map((name, i) => ({
+      date: missingDayDates[i],
+      dayName: name,
+    })),
+    saldo: overrides?.saldo !== undefined ? overrides.saldo : (existingCache?.saldo ?? null),
+    vacation: overrides?.vacation !== undefined ? overrides.vacation : (existingCache?.vacation ?? null),
+  };
+  fs.writeFileSync(config.statusCachePath, JSON.stringify(cache, null, 2) + "\n");
+}
 
-    ensureConfigDir();
-    const cache = {
-      updatedAt: new Date().toISOString(),
-      weekNumber: weekNum,
-      monday: fmtFull(monday),
-      friday: fmtFull(friday),
-      worked,
-      target,
-      remaining,
-      missingDays: missingDayNames.map((name, i) => ({
-        date: missingDayDates[i],
-        dayName: name,
-      })),
-      saldo: existingCache?.saldo ?? null,
-      vacation: existingCache?.vacation ?? null,
-    };
-    fs.writeFileSync(config.statusCachePath, JSON.stringify(cache, null, 2) + "\n");
+/**
+ * Refresh the cache after a log/delete operation.
+ * Switches to month view, reads current entries, and updates the cache file.
+ */
+async function refreshCache(page: Page): Promise<void> {
+  try {
+    spin(t().updatingCache);
+    const todayStr = new Date().toISOString().split("T")[0];
+    const monthYear = toMonthYear(todayStr);
+
+    await setMonthFilter(page, monthYear);
+    const entries = await readGridEntries(page);
+
+    updateCacheFromEntries(entries, monthYear);
     stopSpinner();
   } catch {
     // Cache refresh is non-critical, silently ignore
@@ -239,7 +277,7 @@ export async function statusTime(date: string): Promise<void> {
 
     // 1. Navigate to Leistungen first (sets up session + filters)
     await navigateToLeistungen(page);
-    await setWeekFilter(page, date);
+    await setMonthFilter(page, toMonthYear(date));
 
     spin(t().readingTimeReport);
 
@@ -273,7 +311,6 @@ export async function statusTime(date: string): Promise<void> {
 
     const weekNum = getISOWeekNumber(targetDate);
     const fmtDayMonth = (d: Date) => `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.`;
-    const fmtFull = (d: Date) => `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 
     console.log("");
     console.log(bold(t().statusWeekHeader(weekNum, fmtDayMonth(monday), fmtFull(friday))));
@@ -319,32 +356,27 @@ export async function statusTime(date: string): Promise<void> {
       console.log(`  ${pad(t().statusVacationPlannedByDec + ":", LABEL_WIDTH)} ${fmtHoursAndDays(vacation.plannedByYearEnd)}`);
     }
 
-    // --- Write status cache ---
-    try {
-      ensureConfigDir();
-      const cache = {
-        updatedAt: new Date().toISOString(),
-        weekNumber: weekNum,
-        monday: fmtFull(monday),
-        friday: fmtFull(friday),
-        worked: weekly.worked,
-        target: weekly.target,
-        remaining,
-        missingDays: missingDayNames.map((name, i) => ({
-          date: missingDayDates[i],
-          dayName: name,
-        })),
-        saldo: saldo ? { overtime: saldo.overtime, extraTime: saldo.extraTime, total: saldo.total } : null,
-        vacation: vacation ? {
-          remaining: vacation.remaining,
-          entitlement: vacation.entitlement,
-          remainingDays: parseFloat((vacation.remaining / 8).toFixed(1)),
-          entitlementDays: parseFloat((vacation.entitlement / 8).toFixed(1)),
-        } : null,
-      };
-      fs.writeFileSync(config.statusCachePath, JSON.stringify(cache, null, 2) + "\n");
-    } catch {
-      // Cache write failure is non-critical, silently ignore
+    // --- Write status cache (month-level missing days) ---
+    const monthYear = toMonthYear(date);
+    const nowForCache = new Date();
+    const currentMonthYear = `${String(nowForCache.getMonth() + 1).padStart(2, "0")}.${nowForCache.getFullYear()}`;
+    if (monthYear === currentMonthYear) {
+      try {
+        updateCacheFromEntries(entries, monthYear, {
+          worked: weekly.worked,
+          target: weekly.target,
+          remaining,
+          saldo: saldo ? { overtime: saldo.overtime, extraTime: saldo.extraTime, total: saldo.total } : null,
+          vacation: vacation ? {
+            remaining: vacation.remaining,
+            entitlement: vacation.entitlement,
+            remainingDays: parseFloat((vacation.remaining / 8).toFixed(1)),
+            entitlementDays: parseFloat((vacation.entitlement / 8).toFixed(1)),
+          } : null,
+        });
+      } catch {
+        // Cache write failure is non-critical, silently ignore
+      }
     }
 
     // --- Example command hints ---
@@ -459,6 +491,17 @@ export async function listTime(monthYear: string): Promise<void> {
       const missingDays = weekdays.filter((d) => !entriesByDate.has(d) || entriesByDate.get(d)!.length === 0);
       printHints(entries, missingDays, 8, "");
     }
+
+    // Update cache if listing current month
+    const now = new Date();
+    const currentMonthYear = `${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
+    if (monthYear === currentMonthYear) {
+      try {
+        updateCacheFromEntries(entries, monthYear);
+      } catch {
+        // Cache update is non-critical
+      }
+    }
   } finally {
     await close();
   }
@@ -523,7 +566,7 @@ export async function logTime(entry: TimeEntry): Promise<void> {
       succeed(success(t().saved));
     }
 
-    await refreshWeekCache(page);
+    await refreshCache(page);
   } finally {
     await close();
   }
@@ -599,7 +642,7 @@ export async function deleteTime(
           await deleteSidePanelEntry(page);
         }
         succeed(success(t().entriesDeleted(matches.length)));
-        await refreshWeekCache(page);
+        await refreshCache(page);
         return;
       }
       const idx = parseInt(answer, 10) - 1;
@@ -619,7 +662,7 @@ export async function deleteTime(
 
     succeed(success(t().entryDeleted));
 
-    await refreshWeekCache(page);
+    await refreshCache(page);
   } finally {
     await close();
   }
@@ -663,7 +706,7 @@ export async function loadMonthEntries(): Promise<{
       }
       succeed(success(t().entriesDeleted(sorted.length)));
 
-      await refreshWeekCache(page);
+      await refreshCache(page);
     };
 
     return { entries, deleteFn, closeFn: close };
@@ -736,7 +779,7 @@ export async function batchLogTime(entries: TimeEntry[]): Promise<void> {
     succeed(success(t().batchSummary(created, skipped)));
 
     if (created > 0) {
-      await refreshWeekCache(page);
+      await refreshCache(page);
     }
   } finally {
     await close();

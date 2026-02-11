@@ -57,3 +57,4 @@ abacus alias list|add|remove          # Manage project/service-type aliases
 ## Development Notes
 
 - Vaadin grids are virtualized; only visible rows can be read from the DOM.
+- No AI attribution in commits, PRs, or issues — no Co-Authored-By lines, no "Generated with Claude Code" footers.

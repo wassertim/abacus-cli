@@ -206,7 +206,18 @@ program
   .action(() => {
     const cache = readStatusCache();
 
-    if (!cache || !cache.updatedAt || !isCacheCurrentWeek(cache)) {
+    if (!cache || !cache.updatedAt) {
+      console.log(chalk.dim(t().checkReminder));
+      return;
+    }
+
+    // Stale = updatedAt is not from today or different month
+    const updatedDate = new Date(cache.updatedAt as string).toDateString();
+    const todayDate = new Date().toDateString();
+    const now = new Date();
+    const currentMonth = `${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
+
+    if (updatedDate !== todayDate || (cache.month && cache.month !== currentMonth)) {
       console.log(chalk.dim(t().checkReminder));
       return;
     }
@@ -214,12 +225,12 @@ program
     const missingDays = cache.missingDays as Array<{ date: string; dayName: string }>;
     if (!missingDays || missingDays.length === 0) return;
 
-    const remaining = cache.remaining as number;
     const missingStr = missingDays.map((d) => d.dayName).join(", ");
-    console.log(chalk.yellow(`⚠ ${t().checkWarning(missingStr, remaining.toFixed(1))}`));
+    console.log(chalk.yellow(`⚠ ${t().checkWarning(missingStr)}`));
 
-    const hours = Math.min(remaining / missingDays.length, 8).toFixed(2);
     const date = missingDays[0].date.split(".").reverse().join("-");
+    const remaining = cache.remaining as number | undefined;
+    const hours = remaining && remaining > 0 ? Math.min(remaining, 8).toFixed(2) : "8.00";
     console.log(chalk.dim(`  run: abacus time log --hours ${hours} --text "${t().defaultBookingText}" --date ${date}`));
   });
 
