@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# Wrapper for gh CLI that uses the bot token and targets the correct repository.
+# Usage: gh-bot <any gh command>
+# Example: gh-bot pr view 89 --json reviews
+#
+
+set -euo pipefail
+
+# Always target the abacus-cli repository
+REPO="wassertim/abacus-cli"
+
+if [[ -z "${GH_BOT_TOKEN:-}" ]]; then
+    echo "Error: GH_BOT_TOKEN is not set" >&2
+    echo "Please set GH_BOT_TOKEN environment variable" >&2
+    exit 1
+fi
+
+# Add -R flag automatically for pr and issue commands if not already specified
+add_repo_flag() {
+    local args=("$@")
+    local cmd="${args[0]:-}"
+
+    # Check if -R is already specified
+    for arg in "${args[@]}"; do
+        if [[ "$arg" == "-R" ]] || [[ "$arg" == "--repo" ]]; then
+            # -R already specified, don't override
+            GH_TOKEN="$GH_BOT_TOKEN" gh "$@"
+            return
+        fi
+    done
+
+    # Add -R for pr and issue commands
+    if [[ "$cmd" == "pr" ]] || [[ "$cmd" == "issue" ]]; then
+        GH_TOKEN="$GH_BOT_TOKEN" gh "$@" -R "$REPO"
+    else
+        GH_TOKEN="$GH_BOT_TOKEN" gh "$@"
+    fi
+}
+
+add_repo_flag "$@"
